@@ -48,3 +48,11 @@ que é comercial).
 
 Bump em toda entrega, nos **três** lugares, no mesmo commit:
 `src/lib/version.ts` + `package.json` + `app.json`.
+
+## Preview web (só para aprovar o visual)
+
+`npm run build:web` gera `dist/` estático, publicado na Vercel via `vercel.json`.
+
+⚠️ **A web NÃO prova que o app funciona.** É o React Native renderizado como HTML:
+cor, tipografia, layout e navegação são fiéis; toque, gesto, splash e comportamento
+nativo, não. Serve para aprovar o visual. A validação de verdade é APK (EAS) ou Expo Go.
