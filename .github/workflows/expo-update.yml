@@ -1,0 +1,46 @@
+name: Publicar no Expo Go
+
+# Todo push na main republica o app. O Henrique abre o Expo Go no celular e o
+# update novo já está lá — sem máquina local, sem build de 15 minutos.
+#
+# Runtime: exposdk:57.0.0 (definido por runtimeVersion.policy = "sdkVersion" no
+# app.json). É esse runtime que torna o update legível pelo Expo Go. Se um dia alguém
+# trocar a policy para "appVersion", o Expo Go PARA de abrir o projeto — e o erro será
+# silencioso. Não troque sem entender isso.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  update:
+    name: EAS Update
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Instalar EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Publicar update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_SKIP_AUTO_FINGERPRINT: '1'
+        run: |
+          eas update \
+            --branch preview \
+            --environment preview \
+            --message "${{ github.event.head_commit.message || 'manual' }}" \
+            --non-interactive

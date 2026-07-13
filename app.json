@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "DIM+ Saúde",
-    "slug": "dimplus-app",
-    "version": "0.1.1",
+    "slug": "dimplus",
+    "version": "0.1.2",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "scheme": "dimplus",
@@ -36,6 +36,18 @@
     "ios": {
       "bundleIdentifier": "br.com.dimmaissaude.app",
       "supportsTablet": false
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2147d4ae-6bfc-4c81-b582-1b115af6b830"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2147d4ae-6bfc-4c81-b582-1b115af6b830"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "owner": "dimpluss-team"
   }
 }

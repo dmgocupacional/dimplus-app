@@ -56,3 +56,19 @@ Bump em toda entrega, nos **três** lugares, no mesmo commit:
 ⚠️ **A web NÃO prova que o app funciona.** É o React Native renderizado como HTML:
 cor, tipografia, layout e navegação são fiéis; toque, gesto, splash e comportamento
 nativo, não. Serve para aprovar o visual. A validação de verdade é APK (EAS) ou Expo Go.
+
+## Abrir o app no celular (sem instalar nada)
+
+1. Instale o **Expo Go** (App Store / Play Store)
+2. Abra este link no celular:
+
+```
+exp://u.expo.dev/2147d4ae-6bfc-4c81-b582-1b115af6b830?channel-name=preview&runtime-version=exposdk:57.0.0
+```
+
+Todo push na `main` republica o app via GitHub Actions (`.github/workflows/expo-update.yml`).
+Feche e reabra o Expo Go para pegar a versão nova.
+
+**Cuidado:** `runtimeVersion.policy` está como `"sdkVersion"` de propósito — é o que torna o
+update legível pelo Expo Go. Trocar para `"appVersion"` faz o Expo Go parar de abrir o
+projeto, e o erro é silencioso.
