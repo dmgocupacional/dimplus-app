@@ -1,7 +1,7 @@
 {
   "name": "dimplus-app",
   "main": "expo-router/entry",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "dependencies": {
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo/ui": "~57.0.4",
