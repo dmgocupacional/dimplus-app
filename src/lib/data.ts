@@ -1,74 +1,113 @@
 // ═══ BLOCO: CAMADA DE DADOS ═══
 //
-// FASE 1c = MOCK TOTAL. Nenhuma linha aqui toca o Supabase.
+// FASE 1b/SPRINT B — dados REAIS do Supabase, exceto a rede parceira (ver abaixo).
 //
-// Por quê: sem a FASE 1b (auth CPF+OTP) não existe sessão, logo não existe auth.uid(),
-// logo o RLS de cliente construído na FASE 0 não tem como funcionar. A alternativa
-// (ler com a chave anon usando um cliente_id fixo) exigiria AFROUXAR uma policy num
-// banco que atende cliente pagante — trocaria conveniência de dev por risco em produção.
-// Recusado. Decisão do Henrique em 13/07/2026 ("mock a").
+// O contrato desta camada não mudou desde a 1c: as assinaturas são as mesmas, e por isso
+// nenhuma tela precisou ser reescrita quando o mock saiu. Era esse o ponto da indireção.
 //
-// O CONTRATO ABAIXO É O CONTRATO REAL. As assinaturas (async, tipos de retorno) são as
-// que a versão Supabase vai ter. Quando a 1b entrar, troca-se o CORPO de cada função
-// por uma query — e NENHUMA TELA MUDA. É esse o ponto de manter a indireção.
+// ⚠️ TODA função aqui depende de SESSÃO. Sem `auth.uid()` o RLS da FASE 0 não devolve linha
+// alguma — e devolver vazio é o comportamento CERTO, não um erro a ser tratado com retry.
+// Conta recém-criada loga e não enxerga nada até o staff aprovar: quem chama tem que saber
+// distinguir "sem sessão", "sessão sem cliente" (aguardando aprovação) e "sessão com cliente".
 
-import type { Cliente, Fatura, Modulo, Parceiro } from './types';
+import { supabase } from './supabase';
+import type { Cliente, Fatura, Modulo, ModuloKey, Parceiro, PagamentoStatus } from './types';
 
-const delay = (ms = 260) => new Promise<void>((r) => setTimeout(r, ms));
+// ─── Cliente ────────────────────────────────────────────────────────────────
+// A policy `clientes_app_own_select` filtra por `user_id = auth.uid()`, então não é preciso
+// (nem possível) filtrar por id aqui. `maybeSingle` porque zero linhas é caso legítimo.
+export async function getCliente(): Promise<Cliente | null> {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select(
+      'id, nome, cpf_cnpj, telefone, app_acesso, data_adesao, created_at, subscription_next_due, titular_id, planos:plano_id (nome)'
+    )
+    .limit(1)
+    .maybeSingle();
 
-// ─── Fixtures ───────────────────────────────────────────────────────────────
-// Cliente fictício. NÃO usar dado de cliente real aqui — o repo é versionado.
+  if (error || !data) return null;
 
-const CLIENTE: Cliente = {
-  id: 'mock-cliente-0001',
-  nome: 'Mariana S. Oliveira',
-  cpf: '12345678901',
-  telefone: '11991234567',
-  plano: 'DIM+ SAÚDE',
-  app_acesso: 'liberado',
-  membro_desde: '2024-05-01',
-  validade: '2026-05-01',
-};
+  // O embed do PostgREST vem como objeto ou array dependendo de como ele resolve a
+  // cardinalidade da FK. Normalizar aqui evita `plano` virar "[object Object]" na tela.
+  const planoRaw = (data as { planos?: { nome?: string | null } | { nome?: string | null }[] | null })
+    .planos;
+  const plano = Array.isArray(planoRaw) ? (planoRaw[0]?.nome ?? null) : (planoRaw?.nome ?? null);
 
-const MODULOS: Modulo[] = [
-  { key: 'cartao', nome: 'Cartão digital', ativo: true, exige_pagamento: false },
-  { key: 'rede', nome: 'Rede parceira', ativo: true, exige_pagamento: true },
-  { key: 'financeiro', nome: 'Financeiro', ativo: true, exige_pagamento: false },
-  { key: 'ajuda', nome: 'Ajuda', ativo: true, exige_pagamento: false },
-  // Os quatro abaixo nascem desligados no banco — aparecem como "em breve".
-  { key: 'agendamento', nome: 'Agendamento', ativo: false, exige_pagamento: true },
-  { key: 'exames', nome: 'Meus exames', ativo: false, exige_pagamento: true },
-  { key: 'telemedicina', nome: 'Telemedicina', ativo: false, exige_pagamento: true },
-  { key: 'sos', nome: 'SOS', ativo: false, exige_pagamento: false },
-];
+  return {
+    id: data.id,
+    nome: data.nome ?? '',
+    cpf: (data.cpf_cnpj ?? '').replace(/\D/g, ''),
+    telefone: data.telefone ?? null,
+    plano,
+    app_acesso: (data.app_acesso ?? 'bloqueado') as Cliente['app_acesso'],
+    membro_desde: data.data_adesao ?? data.created_at ?? '',
+    proximo_vencimento: data.subscription_next_due ?? null,
+    dependente: data.titular_id !== null,
+  };
+}
 
-const FATURAS: Fatura[] = [
-  {
-    id: 'mock-pag-003',
-    descricao: 'Mensalidade · Julho/2026',
-    valor: 49.9,
-    vencimento: '2026-07-20',
-    status: 'PENDING',
-    link_pagamento: null,
-  },
-  {
-    id: 'mock-pag-002',
-    descricao: 'Mensalidade · Junho/2026',
-    valor: 49.9,
-    vencimento: '2026-06-20',
-    status: 'RECEIVED',
-    link_pagamento: null,
-  },
-  {
-    id: 'mock-pag-001',
-    descricao: 'Mensalidade · Maio/2026',
-    valor: 49.9,
-    vencimento: '2026-05-20',
-    status: 'RECEIVED',
-    link_pagamento: null,
-  },
-];
+// ─── Módulos ────────────────────────────────────────────────────────────────
+// Duas tabelas: `app_features` (flag global, legível por qualquer autenticado) e
+// `cliente_app_features` (override do próprio cliente). A precedência — override > global —
+// é a MESMA definida em `fn_cliente_pode` no banco. Aqui ela só decide se a tela pinta cadeado;
+// quem realmente barra a leitura é o RLS. Se a precedência mudar no banco, muda aqui junto.
+export async function getModulos(): Promise<Modulo[]> {
+  const [{ data: globais }, { data: overrides }] = await Promise.all([
+    supabase.from('app_features').select('chave, nome, ativo, exige_pagamento, ordem').order('ordem'),
+    supabase.from('cliente_app_features').select('chave, ativo'),
+  ]);
 
+  const porChave = new Map((overrides ?? []).map((o) => [o.chave, o.ativo]));
+
+  return (globais ?? []).map((f) => {
+    const override = porChave.get(f.chave);
+    return {
+      key: f.chave as ModuloKey,
+      nome: f.nome ?? f.chave,
+      // `null`/ausente = sem override = segue a flag global.
+      ativo: override === null || override === undefined ? !!f.ativo : override,
+      exige_pagamento: !!f.exige_pagamento,
+    };
+  });
+}
+
+// ─── Faturas ────────────────────────────────────────────────────────────────
+// A policy de `pagamentos` já embute o gate do módulo `financeiro` E o casamento por
+// `cliente_id OR customer_id = asaas_id` (827 pagamentos têm `cliente_id` NULL; 704 se
+// recuperam pelo `asaas_id`). Não replicar esse OR aqui — perderia a metade recuperada.
+//
+// Dependente recebe lista VAZIA por construção: `asaas_id` é NULL e não há pagamento com o
+// `cliente_id` dele. A tela trata; esta função não inventa fatura de titular.
+export async function getFaturas(): Promise<Fatura[]> {
+  const { data, error } = await supabase
+    .from('pagamentos')
+    .select('id, description, value, due_date, status, invoice_url, payment_link_url')
+    .order('due_date', { ascending: false })
+    .limit(24);
+
+  if (error || !data) return [];
+
+  return data.map((p) => ({
+    id: p.id,
+    descricao: p.description ?? 'Mensalidade',
+    valor: Number(p.value ?? 0),
+    vencimento: (p.due_date ?? '').slice(0, 10),
+    // ⚠️ `status` vem CRU do Asaas — não há CHECK no banco. Um status novo do Asaas cairia
+    // aqui sem aviso; o `rotuloStatus` da tela precisa continuar tolerando desconhecido.
+    status: (p.status ?? 'PENDING') as PagamentoStatus,
+    link_pagamento: p.payment_link_url ?? p.invoice_url ?? null,
+  }));
+}
+
+// ─── Rede parceira ──────────────────────────────────────────────────────────
+// 🟡 AINDA MOCK, E DE PROPÓSITO. Não existe tabela de parceiros no banco (conferido no
+// schema em 31/07/2026: nada com `parceir%`/`rede%`). Criar uma agora, sem CRUD no ERP,
+// pariria uma tabela órfã — alguém teria que inserir farmácia por SQL, e o primeiro parceiro
+// novo já quebraria o processo. O par certo é `tabela + tela em /dashboard/parceiros + policy
+// de leitura pro cliente`, e isso é lote do erp-dimplus, não do app.
+//
+// Enquanto isso a tela mostra estes cinco com rodapé honesto ("rede em expansão").
+// Decisão do Henrique, 31/07/2026.
 const PARCEIROS: Parceiro[] = [
   {
     id: 'p1',
@@ -112,27 +151,10 @@ const PARCEIROS: Parceiro[] = [
   },
 ];
 
-// ─── Contrato público ───────────────────────────────────────────────────────
-// TODO(fase-1b): trocar o corpo destas funções por queries no Supabase.
-// As assinaturas NÃO devem mudar.
-
-export async function getCliente(): Promise<Cliente> {
-  await delay();
-  return CLIENTE;
-}
-
-export async function getModulos(): Promise<Modulo[]> {
-  await delay();
-  return MODULOS;
-}
-
-export async function getFaturas(): Promise<Fatura[]> {
-  await delay();
-  return FATURAS;
-}
-
 export async function getRede(): Promise<Parceiro[]> {
-  await delay();
   return PARCEIROS;
 }
+
+/** A tela usa isto para mostrar o rodapé de "rede em expansão" sem chutar o motivo. */
+export const REDE_E_MOCK = true;
 // ── FIM BLOCO ──

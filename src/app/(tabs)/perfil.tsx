@@ -9,7 +9,7 @@ import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 export default function Perfil() {
-  const { carregando, cliente, acesso, adimplente } = useSession();
+  const { carregando, cliente, acesso, adimplente, sair } = useSession();
 
   if (carregando || !cliente) {
     return (
@@ -57,7 +57,7 @@ export default function Perfil() {
         titulo="Telefone"
         subtitulo={cliente.telefone ?? 'não cadastrado'}
       />
-      <LinhaLista icone="card" titulo="Plano" subtitulo={cliente.plano} />
+      <LinhaLista icone="card" titulo="Plano" subtitulo={cliente.plano ?? 'DIM+ Saúde'} />
 
       <Titulo>Suporte</Titulo>
       <LinhaLista
@@ -67,17 +67,10 @@ export default function Perfil() {
         onPress={() => router.push('/ajuda' as never)}
       />
 
-      {__DEV__ ? (
-        <>
-          <Titulo>Desenvolvimento</Titulo>
-          <LinhaLista
-            icone="construct"
-            titulo="Painel de dev"
-            subtitulo="Simular o gate de acesso"
-            onPress={() => router.push('/dev' as never)}
-          />
-        </>
-      ) : null}
+      {/* O painel de dev morreu junto com o mock: ele simulava o gate quando não havia sessão.
+          Com auth real, forçar estado na tela mentiria sobre o que o RLS devolve. */}
+      <Titulo>Sessão</Titulo>
+      <LinhaLista icone="log-out" titulo="Sair" subtitulo="Encerrar a sessão neste aparelho" onPress={sair} />
 
       <Text style={s.versao}>
         DIM+ Saúde · v{APP_VERSION} · {APP_VERSION_DATA}

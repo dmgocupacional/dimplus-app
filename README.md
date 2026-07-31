@@ -2,7 +2,7 @@
 
 App mobile de cartão de benefícios (Android + iOS). Expo / React Native.
 
-**v0.1.0 · FASE 1c — telas do MVP, sem auth.**
+**v0.3.0 · FASE 1b (provisória) — auth por CPF + senha, dados reais do Supabase.**
 
 ## Rodar
 
@@ -17,19 +17,42 @@ Leia o QR code com o **Expo Go** (loja de apps). Não precisa de conta, build ou
 
 | | |
 |---|---|
-| Auth | ❌ **FASE 1b, bloqueada** — decisão pendente do canal de OTP (Twilio SMS × WhatsApp) |
-| Dados | 🟡 **100% mock** (`src/lib/data.ts`). Zero chamada ao Supabase |
+| Auth | ✅ **CPF + senha, sem OTP.** A identidade real é o TELEFONE; o CPF é apelido, traduzido no ERP |
+| Dados | ✅ **Supabase real**, exceto a rede parceira (ver abaixo) |
 | Gate | 🟡 stub de UI (`src/lib/gate.ts`). O gate real é `fn_cliente_pode` no banco, via RLS |
-| Telas | ✅ Início (cartão) · Rede · Financeiro · Perfil · Ajuda |
+| Telas | ✅ Login · Cadastro · Aguardando aprovação · Início (cartão) · Rede · Financeiro · Perfil · Ajuda |
+| Rede parceira | 🟡 **ainda mock** — não existe tabela de parceiros no banco. Ver `src/lib/data.ts` |
+| Reset de senha | ❌ sem caminho automático (não há canal de mensagem). Cai na fila do ERP |
+
+### Como a sessão decide a tela
+
+`src/state/session.tsx` tem QUATRO estados e o `src/app/_layout.tsx` é o **único** lugar que
+navega a partir deles:
+
+- `carregando` → splash
+- `deslogado` → `(auth)/login`
+- `aguardando` → `(auth)/aguardando`
+- `pronto` → `(tabs)`
+
+⚠️ **`aguardando` não é erro.** A conta nasce inerte de propósito: loga, mas `clientes.user_id`
+segue NULL e `app_acesso` segue `bloqueado`, então o RLS não devolve nada. Quem torna a conta
+funcional é a aprovação do staff em `/dashboard/app` → Solicitações.
+
+⚠️ **As mensagens de erro do login e do cadastro são vagas de propósito.** Detalhar ("CPF não
+encontrado", "telefone já cadastrado") reconstruiria o oráculo de enumeração de CPF que as
+rotas públicas foram desenhadas para não ser.
 
 ## Onde mexer
 
-- `src/lib/data.ts` — **o contrato**. A FASE 1b troca o corpo destas funções por queries
-  no Supabase. As assinaturas não mudam, e nenhuma tela muda junto.
+- `src/lib/data.ts` — **o contrato**. Já são queries reais; as assinaturas continuam as
+  mesmas da fase mock, que é por isso que nenhuma tela precisou mudar junto.
 - `src/lib/gate.ts` — cópia da álgebra de `fn_cliente_pode`. Se a função mudar no banco,
   este arquivo muda junto.
 - `src/theme/tokens.ts` — paleta oficial (brand book de Luís Fonseca).
-- `src/app/dev.tsx` — painel para exercitar o gate no celular. **Morre na 1b.**
+- `src/lib/auth.ts` — cadastro, login e logout. Fala com `/api/public/app-cadastro` e
+  `/api/public/app-login` no erp-dimplus.
+- `src/lib/supabase.ts` — cliente único. Não criar um segundo: dois clientes brigam pelo
+  refresh do token.
 
 ## Antes de tocar em qualquer policy do Supabase
 
@@ -63,7 +86,7 @@ nativo, não. Serve para aprovar o visual. A validação de verdade é APK (EAS)
 2. Abra este link no celular:
 
 ```
-exp://u.expo.dev/2147d4ae-6bfc-4c81-b582-1b115af6b830?channel-name=preview&runtime-version=exposdk:57.0.0
+exp://u.expo.dev/2147d4ae-6bfc-4c81-b582-1b115af6b830?channel-name=preview&runtime-version=exposdk:54.0.0
 ```
 
 Todo push na `main` republica o app via GitHub Actions (`.github/workflows/expo-update.yml`).

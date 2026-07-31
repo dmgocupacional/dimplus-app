@@ -29,7 +29,7 @@ function rotuloStatus(st: PagamentoStatus): { texto: string; tom: 'ok' | 'aviso'
 }
 
 export default function Financeiro() {
-  const { carregando, faturas, adimplente } = useSession();
+  const { carregando, faturas, adimplente, cliente } = useSession();
 
   const ordenadas = useMemo<Fatura[]>(
     () => [...faturas].sort((a, b) => compareISO(b.vencimento, a.vencimento)),
@@ -45,6 +45,33 @@ export default function Financeiro() {
     return (
       <Screen titulo="Financeiro" scroll={false}>
         <ActivityIndicator color={color.navy} />
+      </Screen>
+    );
+  }
+
+  // Dependente NÃO tem financeiro próprio: `asaas_id` é NULL e a cobrança fica no titular.
+  // A lista vazia aqui é o resultado CORRETO da policy, não falha de carregamento — sem esta
+  // tela dedicada o dependente veria "Tudo em dia / nenhuma fatura" e acharia que não deve
+  // nada, quando na verdade a fatura dele existe no nome de outra pessoa.
+  if (cliente?.dependente) {
+    return (
+      <Screen titulo="Financeiro">
+        <Card style={s.emDia}>
+          <View style={s.emDiaIcon}>
+            <Ionicons name="people" size={22} color={color.navy} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.emDiaTitulo}>Cobrança no titular</Text>
+            <Text style={s.emDiaSub}>
+              Você é dependente do plano. As faturas ficam no nome do titular.
+            </Text>
+          </View>
+        </Card>
+        <Aviso
+          tom="info"
+          icone="information-circle"
+          texto="Precisa de 2ª via ou quer conferir o pagamento? Fale com a central pelo menu Ajuda."
+        />
       </Screen>
     );
   }
@@ -72,6 +99,14 @@ export default function Financeiro() {
       )}
 
       <Titulo>Suas faturas</Titulo>
+      {ordenadas.length === 0 ? (
+        <Card>
+          <Text style={s.vazio}>
+            Nenhuma fatura registrada ainda. Se você acabou de aderir, ela aparece assim que a
+            cobrança for gerada.
+          </Text>
+        </Card>
+      ) : null}
       {ordenadas.map((f) => {
         const st = rotuloStatus(f.status);
         return (
@@ -134,5 +169,6 @@ const s = StyleSheet.create({
   faturaDesc: { fontFamily: font.bold, fontSize: size.base, color: color.ink },
   faturaVenc: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: 2 },
   faturaValor: { fontFamily: font.black, fontSize: size.lg, color: color.ink },
+  vazio: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, lineHeight: 20 },
 });
 // ── FIM BLOCO ──

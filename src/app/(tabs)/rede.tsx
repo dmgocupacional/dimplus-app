@@ -79,6 +79,14 @@ export default function Rede() {
           />
         ))
       )}
+
+      {/* A rede ainda é uma lista fixa no código: não existe tabela de parceiros no banco
+          (conferido em 31/07/2026). Dizer isso na tela é melhor que deixar o beneficiário
+          achar que a DIM+ tem só cinco parceiros — e melhor ainda que inventar um "carregando"
+          para dado que não vem de lugar nenhum. Sai quando o CRUD de parceiros entrar no ERP. */}
+      <Text style={s.rodape}>
+        Rede em expansão. Novos parceiros entram aqui conforme as parcerias são fechadas.
+      </Text>
     </Screen>
   );
 }
@@ -108,6 +116,15 @@ const s = StyleSheet.create({
     color: color.ink3,
     textAlign: 'center',
     marginTop: space.xxl,
+  },
+
+  rodape: {
+    fontFamily: font.regular,
+    fontSize: size.xs,
+    color: color.ink3,
+    textAlign: 'center',
+    marginTop: space.xl,
+    lineHeight: 16,
   },
 
   bloqueio: { alignItems: 'center', paddingVertical: space.xxl, gap: space.md },

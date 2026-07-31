@@ -2,7 +2,7 @@
   "expo": {
     "name": "DIM+ Saúde",
     "slug": "dimplus",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "scheme": "dimplus",
@@ -40,7 +40,10 @@
     "extra": {
       "eas": {
         "projectId": "2147d4ae-6bfc-4c81-b582-1b115af6b830"
-      }
+      },
+      "supabaseUrl": "https://bhrxfudnhxqntnnbgyjg.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnhmdWRuaHhxbnRubmJneWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNzY0ODUsImV4cCI6MjA5NDk1MjQ4NX0.UQQzoE0wL9HQdYDhpqxcPXN2HJ7TTxeUbuqrGDjaWN8",
+      "apiBase": "https://erp-dimplus.vercel.app"
     },
     "updates": {
       "url": "https://u.expo.dev/2147d4ae-6bfc-4c81-b582-1b115af6b830"

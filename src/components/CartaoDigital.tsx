@@ -42,7 +42,7 @@ export function CartaoDigital({
       <View style={s.topo}>
         <View>
           <Text style={s.rotulo}>PLANO</Text>
-          <Text style={s.plano}>{cliente.plano}</Text>
+          <Text style={s.plano}>{cliente.plano ?? 'DIM+ SAÚDE'}</Text>
         </View>
         <Image source={LOGO_BRANCO} style={s.logo} contentFit="contain" />
       </View>
@@ -60,10 +60,16 @@ export function CartaoDigital({
           <Text style={s.rotulo}>MEMBRO DESDE</Text>
           <Text style={s.dado}>{formatMesAno(cliente.membro_desde)}</Text>
         </View>
-        <View>
-          <Text style={s.rotulo}>VALIDADE</Text>
-          <Text style={s.dado}>{formatMesAno(cliente.validade)}</Text>
-        </View>
+        {/* Não existe "validade" no banco. O que existe é o PRÓXIMO VENCIMENTO da assinatura
+            (`subscription_next_due`). Quando é NULL — dependente não tem assinatura própria —
+            o campo SOME em vez de mostrar traço: um cartão com validade em branco parece
+            cartão vencido. */}
+        {cliente.proximo_vencimento ? (
+          <View>
+            <Text style={s.rotulo}>PRÓX. VENCIMENTO</Text>
+            <Text style={s.dado}>{formatMesAno(cliente.proximo_vencimento)}</Text>
+          </View>
+        ) : null}
         <Pill texto={estado.texto} tom={estado.tom} />
       </View>
 

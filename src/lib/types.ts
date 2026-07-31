@@ -22,10 +22,24 @@ export type Cliente = {
   nome: string;
   cpf: string;
   telefone: string | null;
-  plano: string;
+  /** `planos.nome` via `clientes.plano_id`. O plano pode não estar preenchido no cadastro. */
+  plano: string | null;
   app_acesso: AppAcesso;
+  /** `data_adesao ?? created_at`. Não existe coluna dedicada. */
   membro_desde: string; // ISO
-  validade: string; // ISO
+  /**
+   * `clientes.subscription_next_due` — PRÓXIMO VENCIMENTO, não "validade do cartão".
+   * ⚠️ Não existe coluna de validade no banco. O mock antigo tinha um campo `validade` que
+   * não correspondia a nada; renomeado em 31/07 para não mentir no cartão. NULL é comum
+   * (dependente não tem assinatura própria) — nesse caso o campo some da tela.
+   */
+  proximo_vencimento: string | null; // ISO
+  /**
+   * `titular_id IS NOT NULL`. Dependente não tem financeiro próprio: `asaas_id` é NULL, a
+   * policy de `pagamentos` casa por `cliente_id OR customer_id = asaas_id` e não devolve nada.
+   * Lista vazia aqui é ESTADO CORRETO, não falha de carregamento.
+   */
+  dependente: boolean;
 };
 
 /** app_features (flag global) já resolvida com o override de cliente_app_features. */
