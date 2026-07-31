@@ -50,6 +50,40 @@ conflito com a frente de repaginação):
 `tsc --noEmit` verde nos dois; `next build` verde no erp; `expo export --platform web` verde
 no app. **Nada provado no aparelho ainda** — ver checklist.
 
+## Prova de comportamento em produção (31/07, pós-deploy)
+
+Feita contra `erp-dimplus.vercel.app` e o PostgREST de produção. Read-only: **nada foi escrito.**
+
+**Neutralidade do login — provada.** Quatro casos, resposta byte a byte idêntica
+(`{"error":"CPF ou senha inválidos."}`, HTTP 401): CPF que existe e tem conta com senha errada ·
+CPF inexistente · CPF mal formado · payload sem senha.
+
+**Canal lateral de tempo — investigado e descartado.** A primeira medição deu 0,6s para CPF
+existente contra 5,9s para inexistente, o que pareceria oráculo por relógio: o CPF sem
+solicitação cai no fallback que varre `clientes` inteira. Hipótese testada em 3 rodadas com o
+container quente e **refutada** — 0,35–0,88s nos dois casos, com o inexistente às vezes mais
+rápido. Os 5,9s eram cold start.
+⚠️ Não é garantia permanente: o fallback é O(n) sobre `clientes` e o caminho do CPF resolvível
+paga bcrypt. Hoje o ruído de rede cobre a diferença. **Se a base crescer muito, remedir.**
+
+**Queries do `data.ts` — validadas contra o schema real.** As três (`clientes` com o embed
+`planos:plano_id(nome)`, `pagamentos`, `app_features`) responderam **200 com lista vazia** usando
+só a chave anon. Isso prova duas coisas ao mesmo tempo: coluna inexistente ou relação inválida
+dariam **400** no parse, antes do RLS — então nenhuma coluna foi inventada; e o RLS está
+**fechado para anônimo**, sem vazar linha alguma sem sessão.
+
+**Forma do embed.** `clientes_plano_id_fkey` é FK many-to-one para `planos`, logo o PostgREST
+devolve **objeto**, não array. A normalização defensiva em `getCliente` cobre os dois casos —
+fica como está, custa nada e sobrevive a uma FK que mude de cardinalidade.
+
+**Ainda NÃO provado (exige escrita, não autorizada nesta sessão):** o caminho feliz do login,
+isto é, uma conta com senha conhecida entrando e o RLS devolvendo dado. Depende de criar
+cadastro de teste ou trocar a senha de uma conta existente.
+
+**Achado de estado:** a linha de teste da sessão de 31/07 (`TESTE CLAUDE B`, CPF `00000000191`)
+segue **pendente** na fila, com conta criada. Conforme o handoff anterior previu, isso significa
+que a recusa nunca foi exercitada na tela — a metade da mecânica que o container não prova.
+
 ## Dívidas abertas (não pioradas, não resolvidas)
 
 1. **Reset de senha sem caminho automático.** A tela de login diz a verdade ("fale com a
