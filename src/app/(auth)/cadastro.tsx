@@ -126,7 +126,7 @@ export default function Cadastro() {
             onChange={setTelefone}
             placeholder="(11) 90000-0000"
             keyboardType="phone-pad"
-            ajuda="É por ele que a sua conta é identificada."
+            ajuda="Usamos para falar com você sobre o seu plano."
             maxLength={16}
           />
           <Campo

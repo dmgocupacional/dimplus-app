@@ -2,7 +2,7 @@
 
 App mobile de cartão de benefícios (Android + iOS). Expo / React Native.
 
-**v0.3.0 · FASE 1b (provisória) — auth por CPF + senha, dados reais do Supabase.**
+**v0.3.1 · FASE 1b (provisória) — auth por CPF + senha, dados reais do Supabase.**
 
 ## Rodar
 
@@ -17,7 +17,7 @@ Leia o QR code com o **Expo Go** (loja de apps). Não precisa de conta, build ou
 
 | | |
 |---|---|
-| Auth | ✅ **CPF + senha, sem OTP.** A identidade real é o TELEFONE; o CPF é apelido, traduzido no ERP |
+| Auth | ✅ **CPF + senha, sem OTP.** A identidade real é um email sintético do CPF, montado no ERP (o phone provider do Supabase está desligado — ver `erp-dimplus/src/lib/app-identidade.ts`) |
 | Dados | ✅ **Supabase real**, exceto a rede parceira (ver abaixo) |
 | Gate | 🟡 stub de UI (`src/lib/gate.ts`). O gate real é `fn_cliente_pode` no banco, via RLS |
 | Telas | ✅ Login · Cadastro · Aguardando aprovação · Início (cartão) · Rede · Financeiro · Perfil · Ajuda |

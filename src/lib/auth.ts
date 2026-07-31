@@ -1,9 +1,13 @@
 // ═══ BLOCO: AUTENTICAÇÃO ═══
 //
-// O Supabase Auth NÃO loga por CPF — a identidade é o TELEFONE (decisão da FASE 0). O CPF é
-// apelido. A tradução CPF → telefone acontece no ERP (`/api/public/app-login`), porque ler
-// `clientes` exige sessão e o RLS não devolve nada para quem ainda não tem uma. O app recebe
-// só os tokens e os injeta no cliente Supabase.
+// O Supabase Auth NÃO loga por CPF. A identidade real é um EMAIL SINTÉTICO derivado do CPF,
+// que o ERP monta em `/api/public/app-login` — o app nunca vê nem precisa saber. Era o TELEFONE
+// até 31/07/2026; mudou porque o phone provider do Supabase está desligado e habilitá-lo exigiria
+// contratar SMS. Provado em produção: login por telefone respondia `phone_provider_disabled`
+// ANTES de olhar a senha, então nenhuma senha jamais funcionaria.
+//
+// O app manda CPF + senha e recebe só os tokens, que injeta no cliente Supabase. Essa fronteira
+// é o motivo de a troca de identidade NÃO ter mexido em nenhuma tela.
 //
 // 🔒 AS DUAS ROTAS SÃO DELIBERADAMENTE MUDAS. O cadastro responde sempre a mesma coisa; o
 // login responde sempre o mesmo erro. NÃO inventar mensagem específica aqui ("CPF não
@@ -18,6 +22,9 @@ import { supabase, API_BASE } from './supabase';
  * ⚠️ MESMA regra do `paraE164` do erp-dimplus (`src/lib/telefone.ts`). Ela existe aqui só
  * para barrar formato inválido ANTES do POST e evitar um 400 que o usuário não entenderia —
  * a normalização que VALE é sempre a do servidor. Se a do erp mudar, esta muda junto.
+ *
+ * O telefone deixou de ser credencial em 31/07, mas continua sendo enviado no cadastro: é dado
+ * de negócio (contato, e conferência do staff na hora de aprovar). Não remover.
  */
 export function paraE164(v: string): string | null {
   let d = v.replace(/\D/g, '');

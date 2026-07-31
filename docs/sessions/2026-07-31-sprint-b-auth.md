@@ -202,6 +202,58 @@ foi consumido (`over_email_send_rate_limit`). Convites ou resets de senha de sta
 falhado na hora seguinte. Sondagem por signup público não se repete — o caminho admin não
 envia email.
 
+## ✅ IMPLEMENTADO E PROVADO PELAS ROTAS REAIS (erp v0.208.0 · app v0.3.1)
+
+O plano B saiu do teste e virou código. Provado **contra as rotas em produção**, não só contra
+o mecanismo do Supabase:
+
+| # | Passo | Resultado |
+|---|---|---|
+| 1 | `POST /api/public/app-cadastro` | ✅ resposta neutra, solicitação na fila, conta criada |
+| 2 | `POST /api/public/app-login` | ✅ devolve `access_token`, `refresh_token`, `expires_at` |
+| 3 | Senha errada, mesmo CPF | ✅ 401 idêntico ao de CPF inexistente |
+| 4 | Sessão sem aprovação | ✅ `clientes` devolve `[]` → app mostra "Quase lá" |
+| 5 | `app_features` na mesma sessão | ✅ 8 módulos (não depende de aprovação) |
+| 6 | Após vincular + liberar | ✅ **a MESMA sessão** passa a ver 1 linha de 778 |
+| 7 | Reversão | ✅ 777 · 0 · 0 · 80 · 0 contas de app |
+
+O item 6 é o que mais importa: **não foi preciso relogar**. Quem estava na tela "Quase lá" e
+toca em "Verificar de novo" depois da aprovação entra — que é exatamente o fluxo desenhado.
+
+### O que mudou no código
+
+**`erp-dimplus` v0.208.0** (`8171688`):
+- `src/lib/app-identidade.ts` (novo) — `emailDoCpf()`, fonte única. Domínio `app.dimeg.com.br`.
+- `app-cadastro/route.ts` — cria com `email` + `email_confirm: true`; busca conta existente com
+  **filtro server-side**, eliminando o laço de 40 páginas do `listUsers`.
+- `app-login/route.ts` — **`resolverTelefone` deletada**. A chave é derivada, não consultada.
+
+**`dimplus-app` v0.3.1**: só texto. A ajuda do campo telefone dizia "é por ele que a sua conta é
+identificada" e virou mentira. Nenhuma tela mudou — é o que a indireção do `auth.ts` comprou.
+
+### ⚠️ Cuidados que ficam
+
+- **NÃO configurar MX em `app.dimeg.com.br`.** O subdomínio é deliberadamente inerte.
+- **Trocar o domínio invalida todas as contas.** O email é a chave de login: mudar o sufixo faz o
+  login derivar uma chave inexistente. Se um dia precisar, é migração (UPDATE em `auth.users`),
+  não troca de constante.
+- **Isto adia a dependência de SMS, não elimina.** OTP por telefone no futuro vai exigir
+  `updateUser({ phone })`, que exige SMS provider.
+- A solicitação `TESTE CLAUDE B` (`+5511999990001`) é **phone-based e não loga** no desenho novo.
+  **Recusar, não aprovar.**
+
+### 🔎 Achado colateral: a sequência de carteirinha está sendo queimada sem gerar cliente
+
+`seq_carteirinha_titular` saltou de **78320 para 78668** (348 números) durante a sessão, e no
+mesmo período foram criados **zero** clientes — nenhuma carteirinha acima de 78320 existe na
+tabela. Não foram os inserts de teste: eles passaram `numero_carteirinha` preenchido, e
+`fn_atribui_carteirinha` retorna cedo nesse caso (verificado no código-fonte da função).
+
+Hipótese não confirmada: algum processo de sync tenta inserir clientes que já existem. `nextval`
+não é transacional, então o número é consumido mesmo quando o INSERT aborta por conflito.
+Não é urgente (a sequência é `int` e há folga), mas é sintoma de sync fazendo trabalho à toa.
+**Investigar na frente do ERP**, não aqui.
+
 ## Dívidas abertas (não pioradas, não resolvidas)
 
 1. **Reset de senha sem caminho automático.** A tela de login diz a verdade ("fale com a
@@ -234,7 +286,7 @@ de repaginação do ERP.
 ## Prompt de retomada
 
 ```
-v0.3.0 (dimplus-app) · backend em erp-dimplus v0.207.0 · commit b15db91
+v0.3.1 (dimplus-app) · backend em erp-dimplus v0.208.0
 Contexto: dimplus-app (dmgocupacional/dimplus-app), branch main.
 (NÃO confie em hash escrito aqui — rode `git log --oneline -5`.)
 
@@ -252,13 +304,12 @@ Ler antes de agir:
 Contexto: o app está em v0.3.0 com auth real (CPF + senha, sem OTP) e dados vindos do
 Supabase pelo RLS da FASE 0. As telas de login, cadastro e "aguardando aprovação" existem.
 
-🔴 BLOQUEADOR ABERTO: o login por telefone está DESLIGADO no projeto Supabase
-(`phone_provider_disabled`). O cadastro funciona (admin.createUser bypassa a config), o login
-não (passa pelo GoTrue normal). NENHUM login passa até isso ser habilitado no dashboard —
-Authentication > Sign In / Providers > Phone. Não precisa de SMS. Ver seção do bloqueador.
-Enquanto isso não for feito, testar login é perda de tempo: o erro é de provider, não de código.
+✅ RESOLVIDO: a identidade do auth é EMAIL SINTÉTICO do CPF (erp: src/lib/app-identidade.ts),
+não telefone. O phone provider do Supabase está desligado e exigiria SMS contratado. Cadastro e
+login foram provados ponta a ponta pelas rotas em produção. NÃO reverter para telefone.
+Base limpa; nenhum resíduo de teste.
 
-Há um cadastro de teste PENDENTE DE LIMPEZA na base (CPF 52998224725) — ver seção do bloqueador.
+FALTA: validar no Expo Go, no aparelho. Nada foi provado no celular ainda.
 
 Decisões que constrangem a implementação:
 - O gate mora no BANCO (fn_cliente_pode). gate.ts é stub de UI. NÃO replicar regra nova.
