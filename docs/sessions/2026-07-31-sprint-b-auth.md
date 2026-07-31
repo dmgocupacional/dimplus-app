@@ -84,6 +84,64 @@ cadastro de teste ou trocar a senha de uma conta existente.
 segue **pendente** na fila, com conta criada. Conforme o handoff anterior previu, isso significa
 que a recusa nunca foi exercitada na tela — a metade da mecânica que o container não prova.
 
+## 🔴 BLOQUEADOR ENCONTRADO NA PROVA — `phone_provider_disabled`
+
+**O login por telefone está DESLIGADO no projeto Supabase.** Descoberto ao provar o caminho
+feliz, que nunca tinha sido executado ponta a ponta (o checklist da sessão anterior tinha esse
+item; ficou por fazer).
+
+Resposta crua do GoTrue para `POST /auth/v1/token?grant_type=password` com telefone e senha
+corretos:
+
+```
+{"code":422,"error_code":"phone_provider_disabled","msg":"Phone logins are disabled"}
+```
+
+**Por que isso passou despercebido até agora:** `admin.createUser({ phone, password,
+phone_confirm: true })` usa a API de administração, que **bypassa a configuração de providers**.
+A conta é criada com sucesso, aparece na fila, tudo parece certo. O login NÃO bypassa — ele passa
+pelo GoTrue normal, que recusa **antes de sequer olhar a senha**. Ou seja: a metade que escreve
+funciona e a metade que lê não, e nada no build acusa.
+
+Isto **não é bug do código da SPRINT B**. A rota `/api/public/app-login` e o app estão corretos;
+eles não teriam como funcionar contra um provider desligado. É um bloqueador da **FASE 1b inteira**,
+que assume `signInWithPassword({ phone })` como mecânica de entrada.
+
+### Ação necessária (não dá para fazer por código)
+
+Dashboard → **Authentication → Sign In / Providers → Phone** → habilitar.
+`api.supabase.com` está bloqueado no container e config de Auth não sai por SQL, então isto é
+manual por necessidade, não por preguiça.
+
+**Não é preciso contratar SMS.** A doc do Supabase condiciona o SMS provider a *confirmar* o
+telefone no signup — e a confirmação aqui já vem do `phone_confirm: true`. Login por telefone +
+senha é recurso distinto do OTP.
+
+⚠️ **Ao habilitar, conferir se o SIGNUP público por telefone fica fechado.** Habilitar o provider
+pode abrir `POST /auth/v1/signup` com telefone para qualquer um com a chave anon. Não seria
+vazamento (as contas nasceriam inertes e o RLS não devolve nada), mas encheria `auth.users` de
+lixo e ruído. Queremos **login ligado, signup público desligado** — quem cria conta é a rota de
+cadastro, via admin.
+
+**Se o Supabase exigir SMS provider mesmo assim**, o plano B é trocar a identidade de telefone
+para um **email sintético derivado do CPF** (ex.: `{cpf}@app.dimplus.invalid`), invisível para o
+usuário. Isso funciona sem provider nenhum, mas muda uma premissa da FASE 0 e **exige decisão do
+Henrique** — não implementar por conta própria.
+
+### Estado de teste deixado na base (LIMPAR)
+
+Para provar o caminho feliz foi criado um cadastro de teste que **ficou incompleto** por causa do
+bloqueador acima:
+
+- `app_acesso_solicitacoes`: CPF `52998224725`, `TESTE QA SPRINT B`, telefone `+5511999990002`
+- `auth.users`: conta com esse telefone
+
+Nenhum cliente real foi tocado: 777 clientes, 0 vinculados, 0 liberados, 80 pagamentos órfãos e a
+sequência de carteirinha em 78320 — **tudo igual a antes**. Antes de inserir qualquer coisa foram
+lidos os triggers de `clientes`: `fn_adota_pagamentos_orfaos` retorna cedo quando `asaas_id` é
+NULL, e `fn_atribui_carteirinha` retorna cedo quando o número já vem preenchido. Por isso o
+cliente de teste nem chegou a ser criado.
+
 ## Dívidas abertas (não pioradas, não resolvidas)
 
 1. **Reset de senha sem caminho automático.** A tela de login diz a verdade ("fale com a
@@ -133,7 +191,14 @@ Ler antes de agir:
 
 Contexto: o app está em v0.3.0 com auth real (CPF + senha, sem OTP) e dados vindos do
 Supabase pelo RLS da FASE 0. As telas de login, cadastro e "aguardando aprovação" existem.
-Falta VALIDAR no Expo Go — nada foi provado no aparelho (checklist de 10 itens neste doc).
+
+🔴 BLOQUEADOR ABERTO: o login por telefone está DESLIGADO no projeto Supabase
+(`phone_provider_disabled`). O cadastro funciona (admin.createUser bypassa a config), o login
+não (passa pelo GoTrue normal). NENHUM login passa até isso ser habilitado no dashboard —
+Authentication > Sign In / Providers > Phone. Não precisa de SMS. Ver seção do bloqueador.
+Enquanto isso não for feito, testar login é perda de tempo: o erro é de provider, não de código.
+
+Há um cadastro de teste PENDENTE DE LIMPEZA na base (CPF 52998224725) — ver seção do bloqueador.
 
 Decisões que constrangem a implementação:
 - O gate mora no BANCO (fn_cliente_pode). gate.ts é stub de UI. NÃO replicar regra nova.
