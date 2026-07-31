@@ -142,6 +142,66 @@ lidos os triggers de `clientes`: `fn_adota_pagamentos_orfaos` retorna cedo quand
 NULL, e `fn_atribui_carteirinha` retorna cedo quando o número já vem preenchido. Por isso o
 cliente de teste nem chegou a ser criado.
 
+## ✅ PLANO B PROVADO PONTA A PONTA (31/07, com service role)
+
+O Henrique não tem provider de SMS, então habilitar o phone provider está fora. O plano B —
+**identidade = email sintético derivado do CPF** — foi provado inteiro contra produção antes de
+uma linha de código ser escrita:
+
+| # | Passo | Resultado |
+|---|---|---|
+| 1 | `admin.createUser` com email sintético + `email_confirm: true` | ✅ conta criada, **nenhum email enviado** |
+| 2 | `POST /token?grant_type=password` com email + senha | ✅ **login passou** (o que era impossível com telefone) |
+| 3 | Sessão válida com `clientes.user_id` NULL | ✅ RLS devolve `[]` — conta inerte funciona |
+| 4 | Cliente vinculado + `app_acesso='liberado'` | ✅ RLS devolve **1 linha de 778** |
+| 5 | `app_features` com sessão | ✅ 8 módulos |
+| 6 | `pagamentos` sem vínculo | ✅ `[]` |
+
+**A validação de domínio é do signup PÚBLICO, não do admin.** Quatro domínios foram testados
+pelo caminho admin — inclusive `app.dimeg.com.br` (que o signup público rejeitava) e
+`dimplus.local` (que nem é TLD válido) — e **todos passaram**. O admin bypassa a validação pelo
+mesmo motivo que bypassa a config de providers. Logo o domínio é escolha de desenho, não
+restrição técnica.
+
+**O embed `planos` vem como OBJETO**, confirmado com sessão real: `"planos": {"nome": "DIM+
+Saúde"}`. A normalização defensiva de `getCliente` estava certa; fica como está.
+
+**Achado colateral:** `sos` está `ativo=true` no banco. O mock da 1c tinha `false`. Não é bug —
+é a realidade do banco, e a tela vai mostrar SOS ligado.
+
+### Por que isto é melhor que um remendo
+
+O email sintético é determinístico a partir do CPF, então **o login deixa de precisar resolver
+CPF → telefone consultando o banco**. Some junto toda a fragilidade dessa resolução: a ordem
+"solicitação antes de cliente", o caso de CPF duplicado, o telefone divergente. E no cadastro, a
+busca por conta existente passa a ter **filtro server-side por email** — o que elimina o laço de
+páginas do `listUsers`, que era pegadinha documentada (paginava, não filtrava por telefone, e um
+falso-negativo fazia o cadastro sumir calado).
+
+**O telefone não some**: continua em `clientes.telefone` e na solicitação, como dado de negócio.
+Só deixa de ser credencial.
+
+⚠️ **Isto adia a dependência de SMS, não elimina.** Quando a WABA sair, plugar OTP por telefone
+vai exigir `updateUser({ phone })`, que exige SMS provider configurado.
+
+**Custo de migração: zero.** São 0 clientes vinculados e nenhuma conta real. Cada cadastro real
+que entrar antes da troca vira conta para migrar depois.
+
+### Estado da base após a prova
+
+Revertida ao exato: **777 clientes · 0 vinculados · 0 liberados · 80 pagamentos órfãos ·
+sequência de carteirinha 78320**. Todos os usuários de teste apagados. Sobrou apenas a conta
+`+5511999990001` da solicitação `TESTE CLAUDE B`, que é da sessão anterior.
+⚠️ **Essa solicitação deve ser RECUSADA, não aprovada** — a conta dela é phone-based e não
+conseguirá logar no desenho novo.
+
+### Efeito colateral do teste (registrado por honestidade)
+
+Ao sondar a validação de domínio pelo signup público, o rate limit de envio de email do projeto
+foi consumido (`over_email_send_rate_limit`). Convites ou resets de senha de staff podem ter
+falhado na hora seguinte. Sondagem por signup público não se repete — o caminho admin não
+envia email.
+
 ## Dívidas abertas (não pioradas, não resolvidas)
 
 1. **Reset de senha sem caminho automático.** A tela de login diz a verdade ("fale com a
