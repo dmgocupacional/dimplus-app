@@ -53,13 +53,28 @@ export type Modulo = {
 /**
  * pagamentos.status vem CRU do Asaas — não há CHECK no banco.
  * Ver ROADMAP-APP § Fronteira, item 5: status novo do Asaas muda o gate sem avisar.
+ *
+ * ⚠️ ESTA LISTA JÁ MENTIU UMA VEZ. Até 17/08/2026 declarava só 5 valores enquanto a
+ * produção tinha 9 — e o `as PagamentoStatus` do data.ts fazia o TypeScript aceitar a
+ * mentira em silêncio. Resultado: `rotuloStatus` caía fora do switch, devolvia undefined
+ * e a aba Financeiro morria em tela preta para 807 pagamentos (v0.3.3).
+ *
+ * A união é ABERTA de propósito (`| (string & {})`): a coluna é `text` sem constraint, um
+ * status novo do Asaas entra sem aviso, e o consumidor precisa ser obrigado pelo TS a ter
+ * um caminho de fallback. NÃO fechar esta união.
  */
-export type PagamentoStatus =
+export type PagamentoStatusConhecido =
   | 'RECEIVED'
+  | 'RECEIVED_IN_CASH'
   | 'CONFIRMED'
   | 'PENDING'
   | 'OVERDUE'
-  | 'DUNNING_REQUESTED';
+  | 'DUNNING_REQUESTED'
+  | 'DUNNING_RECEIVED'
+  | 'REFUNDED'
+  | 'DELETED';
+
+export type PagamentoStatus = PagamentoStatusConhecido | (string & {});
 
 export type Fatura = {
   id: string;

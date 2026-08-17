@@ -15,16 +15,38 @@ import type { Fatura, PagamentoStatus } from '@/lib/types';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
-function rotuloStatus(st: PagamentoStatus): { texto: string; tom: 'ok' | 'aviso' | 'erro' } {
+// ⚠️ ESTA FUNÇÃO PRECISA TOLERAR STATUS DESCONHECIDO — o comentário do data.ts já avisava
+// disso, e mesmo assim ela quebrou. Até 17/08/2026 era um switch sem `default` cobrindo 5
+// status, enquanto a produção tinha 9: RECEIVED_IN_CASH (487 registros), DELETED (291),
+// REFUNDED (28) e DUNNING_RECEIVED (1) caíam fora, a função devolvia undefined, e o
+// `st.texto` da linha de render derrubava a tela inteira em preto.
+//
+// `pagamentos.status` é `text` SEM CHECK e vem cru do Asaas. Um status novo entra sem aviso.
+// O `default` abaixo não é zelo excessivo: é a única coisa entre um lançamento do Asaas e a
+// aba Financeiro fora do ar. NÃO REMOVER, mesmo que o switch pareça exaustivo.
+function rotuloStatus(st: PagamentoStatus): { texto: string; tom: 'ok' | 'aviso' | 'erro' | 'neutro' } {
   switch (st) {
     case 'RECEIVED':
     case 'CONFIRMED':
+    // Pago presencialmente na clínica — dinheiro na mão, quitado. É o 4º status mais comum
+    // da base; tratá-lo como desconhecido faria a fatura paga parecer pendente.
+    case 'RECEIVED_IN_CASH':
+    // Cobrança em negativação que acabou paga. Para o cliente, é pago.
+    case 'DUNNING_RECEIVED':
       return { texto: 'pago', tom: 'ok' };
     case 'PENDING':
       return { texto: 'a vencer', tom: 'aviso' };
     case 'OVERDUE':
     case 'DUNNING_REQUESTED':
       return { texto: 'em atraso', tom: 'erro' };
+    case 'REFUNDED':
+      return { texto: 'estornada', tom: 'neutro' };
+    // Cobrança cancelada. Permanece VISÍVEL por decisão do Henrique (17/08/2026): a lista
+    // não esconde dado do cliente; o tom neutro já sinaliza que não há nada a pagar.
+    case 'DELETED':
+      return { texto: 'cancelada', tom: 'neutro' };
+    default:
+      return { texto: 'em processamento', tom: 'neutro' };
   }
 }
 
