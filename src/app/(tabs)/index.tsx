@@ -25,6 +25,15 @@ const ATALHOS: Atalho[] = [
   { key: 'agendamento', rotulo: 'Agendar', icone: 'calendar', rota: null },
   { key: 'exames', rotulo: 'Exames', icone: 'document-text', rota: null },
   { key: 'telemedicina', rotulo: 'Telemedicina', icone: 'videocam', rota: null },
+  // 🔴 TOQUE MORTO CONHECIDO (apurado 17/08/2026, correção adiada pelo Henrique).
+  // `app_features.sos` está ativo=true / exige_pagamento=false, logo `pode('sos')` devolve
+  // sempre true e `emBreve` é false. Com `rota: null`, `abrir()` não navega, não bloqueia e
+  // não mostra toast: o tile parece aberto e o toque não faz NADA. É o único atalho nessa
+  // condição — agendamento/exames/telemedicina estão ativo=false e pintam "em breve"
+  // corretamente; rede/financeiro/ajuda têm rota. Atinge 100% das contas.
+  // Três saídas possíveis, decisão pendente: (a) toast "em breve", (b) forçar emBreve na
+  // tela — mentira leve, a flag está ligada, (c) desligar a flag `sos` no banco, única
+  // honesta mas é escrita em produção.
   { key: 'sos', rotulo: 'SOS', icone: 'medkit', rota: null },
   { key: 'ajuda', rotulo: 'Ajuda', icone: 'help-circle', rota: '/ajuda' },
 ];

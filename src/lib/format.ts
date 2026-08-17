@@ -1,5 +1,15 @@
 // ═══ BLOCO: FORMATADORES ═══
 // Funções puras. Sem dependência de estado, sem I/O.
+//
+// 🔴 BURACO CONHECIDO EM `formatCPF` / `maskCPF` (apurado 17/08/2026, tratamento adiado
+// pelo Henrique). Ambas fazem `padStart(11,'0').slice(0,11)`, o que assume 11 dígitos.
+// A base tem, dos 809 clientes:
+//     11 dígitos ... 795   (ok)
+//     14 dígitos ... 10    → CNPJ, vira CPF FALSO formatado no cartão e no Perfil
+//      0 dígitos ...  4    → vira "•••.000.000-••", INVENTA um documento
+// Alcançabilidade provavelmente nula hoje: o cadastro do app casa por CPF, então essas
+// contas dificilmente existem no app. NÃO foi confirmado. Antes de gastar patch, conferir
+// se algum desses 14 consegue chegar a app_acesso='liberado'.
 
 export function formatCPF(cpf: string): string {
   const d = cpf.replace(/\D/g, '').padStart(11, '0').slice(0, 11);
