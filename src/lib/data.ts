@@ -89,7 +89,11 @@ export async function getFaturas(): Promise<Fatura[]> {
 
   return data.map((p) => ({
     id: p.id,
-    descricao: p.description ?? 'Mensalidade',
+    // ⚠️ NÃO trocar por `?? 'Mensalidade'`. O `??` só cobre null/undefined, e a coluna nunca
+    // é NULL: são 147 registros com `description` = STRING VAZIA (conferido em 17/08/2026,
+    // `count(*) filter (where description is not null and btrim(description) = '')`).
+    // Com `??` o fallback era letra morta e a linha da fatura renderizava título em branco.
+    descricao: (p.description ?? '').trim() || 'Mensalidade',
     valor: Number(p.value ?? 0),
     vencimento: (p.due_date ?? '').slice(0, 10),
     // ⚠️ `status` vem CRU do Asaas — não há CHECK no banco. Um status novo do Asaas cairia

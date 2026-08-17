@@ -30,8 +30,14 @@ export type Cliente = {
   /**
    * `clientes.subscription_next_due` — PRÓXIMO VENCIMENTO, não "validade do cartão".
    * ⚠️ Não existe coluna de validade no banco. O mock antigo tinha um campo `validade` que
-   * não correspondia a nada; renomeado em 31/07 para não mentir no cartão. NULL é comum
-   * (dependente não tem assinatura própria) — nesse caso o campo some da tela.
+   * não correspondia a nada; renomeado em 31/07 para não mentir no cartão. NULL é comum —
+   * nesse caso o campo SOME da tela (cartão com validade em branco parece cartão vencido).
+   *
+   * ⚠️ ATÉ 17/08/2026 ESTE COMENTÁRIO EXPLICAVA O NULL COMO "dependente não tem assinatura
+   * própria". O dado desmente: são 385 clientes com NULL (48% da base) e apenas 44
+   * dependentes — a explicação não cobre os outros 341. A causa real do grosso dos NULLs
+   * NÃO foi apurada. Não reintroduzir a explicação antiga; ela induz a concluir que o campo
+   * só falta para dependente, o que levaria a tratar 341 casos como anomalia.
    */
   proximo_vencimento: string | null; // ISO
   /**
