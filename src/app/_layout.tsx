@@ -23,6 +23,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ErroBoundary } from '@/components/ErroBoundary';
 import { SessionProvider, useSession } from '@/state/session';
 import { color } from '@/theme/tokens';
 
@@ -102,7 +103,12 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SessionProvider>
         <StatusBar style="dark" />
-        <Roteador />
+        {/* DENTRO dos providers de propósito: o boundary usa tokens de tema e a versão do
+            app para montar a tela de erro. Fora daqui, um crash na própria tela de erro
+            voltaria ao preto — que é justamente o que este bloco existe para eliminar. */}
+        <ErroBoundary local="raiz">
+          <Roteador />
+        </ErroBoundary>
       </SessionProvider>
     </SafeAreaProvider>
   );
