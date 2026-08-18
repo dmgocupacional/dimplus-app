@@ -84,6 +84,12 @@ function Roteador() {
         name="ajuda"
         options={{ headerShown: true, title: 'Ajuda', headerTintColor: color.navy }}
       />
+      {/* Rota EMPILHADA, não aba: o app tem 4 abas por decisão de produto, e qualquer
+          arquivo dentro de (tabs)/ viraria uma quinta automaticamente. Entra pelo Perfil. */}
+      <Stack.Screen
+        name="dependentes"
+        options={{ headerShown: true, title: 'Dependentes', headerTintColor: color.navy }}
+      />
     </Stack>
   );
 }

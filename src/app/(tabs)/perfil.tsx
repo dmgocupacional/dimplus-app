@@ -58,6 +58,13 @@ export default function Perfil() {
         subtitulo={cliente.telefone ?? 'não cadastrado'}
       />
       <LinhaLista icone="card" titulo="Plano" subtitulo={cliente.plano ?? 'DIM+ Saúde'} />
+      {/* Só leitura (S-C). A inclusão é a S-D e nasce como solicitação com aprovação. */}
+      <LinhaLista
+        icone="people"
+        titulo="Dependentes"
+        subtitulo="Quem está no seu plano"
+        onPress={() => router.push('/dependentes' as never)}
+      />
 
       <Titulo>Suporte</Titulo>
       <LinhaLista
