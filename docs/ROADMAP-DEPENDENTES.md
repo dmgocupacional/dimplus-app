@@ -264,6 +264,17 @@ Duas travas caíram:
 **S3 aceite** (`contrato_termos` = 0, texto é de advogado) · telemedicina (sem provedor).
 Não sequenciar como se fosse trabalho de código.
 
+🔴 **Dívida herdada do erp (18/08) — não é trabalho do app, mas condiciona a liberação:**
+`clientes.asaas_subscription_id` é **singular** e o Asaas permite N assinaturas por customer.
+**5 clientes têm duas**, uma invisível ao ERP. O app lê `subscription_next_due` no cartão
+digital, que é derivado desse campo — para os 5, o cartão mostraria o vencimento da assinatura
+errada (Marluce `2026-07-01`, LEONARDO `2025-11-13`, ambos no passado).
+✅ **Impacto hoje = ZERO**: os 5 estão `bloqueado` e sem `user_id`. **Acorda no dia da
+liberação.** Regra: resolver a duplicata no ERP **antes** de liberar qualquer um dos 5.
+A cura é lá (parar de ler pelo campo singular) — **não mascarar na tela do app**, isso
+esconderia o dado errado em vez de corrigi-lo. Comentado inline em
+`src/components/CartaoDigital.tsx`. Boletos PENDING vencem em setembro: **tem prazo.**
+
 🔵 **Medido em produção em 18/08:** dependentes **44**, com `data_nascimento` **0 de 44** ·
 titulares sem nascimento **237** · clientes com `user_id` **3** · liberados **3** ·
 `feegow_paciente_id` **538** · `contrato_termos` **0**.

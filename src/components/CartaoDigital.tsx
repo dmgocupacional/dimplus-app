@@ -63,7 +63,18 @@ export function CartaoDigital({
         {/* Não existe "validade" no banco. O que existe é o PRÓXIMO VENCIMENTO da assinatura
             (`subscription_next_due`). Quando é NULL — dependente não tem assinatura própria —
             o campo SOME em vez de mostrar traço: um cartão com validade em branco parece
-            cartão vencido. */}
+            cartão vencido.
+
+            🔴 18/08/2026 — ESTE CAMPO PODE MOSTRAR A ASSINATURA ERRADA, e a causa está no
+            outro repo. `clientes.asaas_subscription_id` é SINGULAR, mas o Asaas permite N
+            assinaturas por customer: medidos 5 clientes com DUAS, uma invisível ao ERP.
+            Para eles o campo reflete a que o ERP enxerga, não necessariamente a que sustenta
+            a cobrança — Marluce daria 2026-07-01 e LEONARDO 2025-11-13, ambos no passado.
+            ✅ Impacto hoje é ZERO: os 5 estão `app_acesso='bloqueado'` e sem `user_id`.
+            NÃO tratar aqui — a cura é no erp-dimplus (parar de ler pelo campo singular).
+            Mascarar na tela esconderia o dado errado em vez de corrigi-lo.
+            Ver `erp-dimplus/docs/ROADMAP-APP.md` §9 e a sessão
+            `erp-dimplus/docs/sessions/2026-08-18-dedup-conversao-drift-asaas-e-unique-cpf.md`. */}
         {cliente.proximo_vencimento ? (
           <View>
             <Text style={s.rotulo}>PRÓX. VENCIMENTO</Text>
