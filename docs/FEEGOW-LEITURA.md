@@ -192,6 +192,26 @@ Consequência direta das seções 2–5, para não redescobrir:
 6. Sentinelas `0`/`127` não exibidas como faixa (seção 4).
 7. Caminho explícito para cliente sem `feegow_paciente_id` (seção 6.1).
 
+   🔴 **18/08c — SONDADO AO VIVO: AS ROTAS EXISTEM MAS SÃO INALCANÇÁVEIS PELO APP HOJE.**
+   A afirmação abaixo de que "o S2 é validação de contrato, não integração nova" **estava
+   errada** e a medição a refutou. Chamada real com `Bearer` válido da conta de teste:
+   `GET /api/feegow/agendamento/opcoes` → **307 → `/login`**, idem `disponibilidade`.
+   Duas causas independentes, ambas no erp:
+   (1) `src/middleware.ts` protege todo `/api` fora de `publicApiRoutes`
+       (`webhooks/`,`auth`,`public/`,`cron/`,`mcp/`) e redireciona sem **cookie** — não chega
+       no `guardAppModulo`;
+   (2) `guardAppModulo` monta a sessão via `cookies()` (`lib/supabase/server.ts`). **App React
+       Native não tem cookie**, manda `Authorization: Bearer` → `getUser()` daria null → 401.
+   ✅ O login da conta de teste FUNCIONA (token emitido). Não é credencial.
+   ✅ A lógica do gate, a derivação de `paciente_id` pelo CPF e a posse fail-closed estão
+   corretas e **não precisam ser refeitas** — falta só o transporte da sessão.
+   ⏸️ **O S2 ganha um PRÉ-LOTE no `erp-dimplus`** (aceitar Bearer nessas rotas + isentar do
+   gate de cookie, sem afrouxar nada para o staff). Precedente já existe no repo: `/api/mcp/`
+   se autentica por capability URL e o POST de `/api/webhooks/asaas` por header próprio — o
+   padrão "sai do gate de cookie e se autentica dentro da rota" não é invenção.
+   🔴 **NÃO construir a tela do S2 antes disso.** Seria tela contra contrato nunca exercitado
+   ao vivo — exatamente o padrão que gerou todo bug já achado neste app.
+
 8. 🟢 **18/08/2026 — DE ONDE O DADO VEM: das rotas REST do `erp-dimplus`, NÃO da Feegow.**
    Esta seção foi escrita descrevendo a forma da tela sem dizer qual é a fonte, e isso deixou
    um garfo em aberto que só apareceu ao ler os dois repos juntos. Fechado:

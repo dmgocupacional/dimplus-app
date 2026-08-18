@@ -251,8 +251,13 @@ Duas travas caíram:
   desde 16/07), não a Feegow direto. Ver `docs/FEEGOW-LEITURA.md` §8.
 
 **No app (este repo), nesta ordem:**
-1. **S2 · agendamento read-only** — começa exercitando `opcoes` + `disponibilidade` com a
-   conta de teste. É validação de contrato existente, não integração nova.
+0. ⏸️ **PRÉ-LOTE NO `erp-dimplus` — autenticação Bearer nas rotas `/api/feegow/*` do app.**
+   **BLOQUEIA O S2.** Sondado ao vivo em 18/08c: as rotas devolvem **307 → `/login`** para
+   `Bearer` válido, porque o middleware exige cookie e o guard lê a sessão de `cookies()`.
+   App React Native não tem cookie. Detalhe completo em `docs/FEEGOW-LEITURA.md` §8.
+   É trabalho no OUTRO repo → sessão própria (1 conversa = 1 repo).
+1. **S2 · agendamento read-only** — depois do pré-lote, com a rota respondendo de verdade.
+   ⚠️ Não antecipar a tela: seria forma contra contrato não exercitado.
 2. **S-D** · solicitação de inclusão de dependente.
 3. **S-F** · login do dependente maior — ⚠️ **NÃO é a S-B que a destrava** (entregue em 18/08c).
    Depende do **backfill dos 256 legados** no erp: hoje 46 de 46 dependentes seguem sem data.
