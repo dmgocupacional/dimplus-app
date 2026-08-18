@@ -67,10 +67,12 @@ export function CartaoDigital({
 
             🔴 18/08/2026 — ESTE CAMPO PODE MOSTRAR A ASSINATURA ERRADA, e a causa está no
             outro repo. `clientes.asaas_subscription_id` é SINGULAR, mas o Asaas permite N
-            assinaturas por customer: medidos 5 clientes com DUAS, uma invisível ao ERP.
-            Para eles o campo reflete a que o ERP enxerga, não necessariamente a que sustenta
-            a cobrança — Marluce daria 2026-07-01 e LEONARDO 2025-11-13, ambos no passado.
-            ✅ Impacto hoje é ZERO: os 5 estão `app_acesso='bloqueado'` e sem `user_id`.
+            assinaturas por customer.
+            ✅ 18/08c — os 5 casos que existiam foram REMEDIADOS no erp: hoje nenhum cliente
+            tem duas assinaturas ativas, então nenhum cartão está errado AGORA.
+            🔴 A dívida ESTRUTURAL continua: a leitura ainda passa pelo campo singular, então
+            um cliente novo com duas assinaturas reproduz o cartão errado EM SILÊNCIO. O app
+            não ficou imune — só não há caso vivo.
             NÃO tratar aqui — a cura é no erp-dimplus (parar de ler pelo campo singular).
             Mascarar na tela esconderia o dado errado em vez de corrigi-lo.
             Ver `erp-dimplus/docs/ROADMAP-APP.md` §9 e a sessão

@@ -254,7 +254,8 @@ Duas travas caíram:
 1. **S2 · agendamento read-only** — começa exercitando `opcoes` + `disponibilidade` com a
    conta de teste. É validação de contrato existente, não integração nova.
 2. **S-D** · solicitação de inclusão de dependente.
-3. **S-F** · login do dependente maior — **só depois da S-B rodar no erp**.
+3. **S-F** · login do dependente maior — ⚠️ **NÃO é a S-B que a destrava** (entregue em 18/08c).
+   Depende do **backfill dos 256 legados** no erp: hoje 46 de 46 dependentes seguem sem data.
 4. **S4** escrita na Feegow (só após o S2 em device) · **S5** build/submit.
 
 **No `erp-dimplus` (sessão própria — 1 conversa = 1 repo):**
@@ -264,7 +265,18 @@ Duas travas caíram:
 **S3 aceite** (`contrato_termos` = 0, texto é de advogado) · telemedicina (sem provedor).
 Não sequenciar como se fosse trabalho de código.
 
-🔴 **Dívida herdada do erp (18/08) — não é trabalho do app, mas condiciona a liberação:**
+🆕 **18/08c — O ERP ENTREGOU A S-B (v0.256.0), E ISSO NÃO DESBLOQUEIA A S-F.**
+A S-B fecha a torneira: **cadastro novo** agora exige nascimento nas três portas. Ela **não
+seca o tanque** — medido agora: **46 de 46 dependentes ainda sem `data_nascimento`** (e subiu
+de 44 para 46 hoje), `data_nascimento_fonte='cadastro'` = **0**.
+🔴 **Quem bloqueia a S-F é o BACKFILL dos 256 legados**, lote aberto no erp e ainda não
+executado — não a S-B. Enquanto ele não rodar, a classificação menor/maior segue
+**inverificável** para toda a população pediátrica existente, e o "caminho da idade
+desconhecida" de `src/lib/idade.ts` continua sendo **o caso normal, não a exceção**.
+✅ **As 5 assinaturas duplicadas do Asaas foram remediadas** — a nota de risco abaixo está
+cumprida e não pesa mais na liberação. A dívida estrutural do campo singular segue viva no erp.
+
+🔴 ~~**Dívida herdada do erp (18/08)**~~ ✅ **RESOLVIDA em 18/08c — mantida como histórico:**
 `clientes.asaas_subscription_id` é **singular** e o Asaas permite N assinaturas por customer.
 **5 clientes têm duas**, uma invisível ao ERP. O app lê `subscription_next_due` no cartão
 digital, que é derivado desse campo — para os 5, o cartão mostraria o vencimento da assinatura
