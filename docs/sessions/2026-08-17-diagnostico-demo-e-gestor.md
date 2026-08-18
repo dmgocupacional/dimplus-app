@@ -233,8 +233,46 @@ RESTRICOES:
 - Schema-first via Supabase MCP antes de qualquer codigo de dados.
 - CUTOVER SEM JANELA em migracao de leitura A->B: trigger de espelho no banco
   antes de migrar leitura; nunca backfill manual como transicao.
-- Version bump nos TRES lugares no mesmo commit (package.json + string no
-  Sidebar.tsx + footer do login).
+- Version bump no erp-dimplus: QUATRO lugares no mesmo commit — package.json +
+  Sidebar.tsx + footer do login + VERSAO em src/app/balcao/client.tsx.
+  (Corrigido em 17/08: este bloco dizia TRES, e foi por isso que a v0.255.0 saiu com
+  o balcao em 0.254.1 em producao. O balcao exibe a versao em tela de proposito.)
+  ATENCAO: o bump do dimplus-app e outro — src/lib/version.ts + package.json + app.json.
 - Aceite de contrato e area juridica: nao redija clausula por conta propria.
   Sinalize o que precisa passar por advogado.
 ```
+
+---
+
+## 🔵 ADENDO 17/08 — o que mudou no erp-dimplus depois deste handoff
+
+Escrito da conversa do **erp-dimplus** ao sincronizar as duas frentes. Este handoff
+descrevia o ERP em `v0.253.0`; ele **já está em `v0.255.1`**. Nada aqui muda o escopo do
+app — é para quem clonar o ERP a partir deste documento não achar o repo diferente do texto.
+
+🔴 **PONTO ÚNICO DE RETOMADA DO ERP:** `docs/sessions/RETOMADA-erp-dimplus.md` **no repo
+erp-dimplus** (não os prompts embutidos em handoffs, que envelhecem). Ler de lá.
+
+**O que entrou no ERP:**
+- `v0.253.1` — 589 linhas de drawer morto removidas (U5 fase 1).
+- `v0.254.0` — balcão mostra o que o plano inclui ("não cobra", **sem preço**).
+  🔴 O plano do **dependente** vem do **titular** (dependente tem `clientes.plano_id` NULL).
+- `v0.254.1` — `indicacao-modal.tsx` virou `components/DetalheModal.tsx` (U5 fase 2a).
+- `v0.255.0` — **motivo de perda obrigatório**; `fn_mover_estagio_lead` vira a porta de
+  escrita de `leads.estagio`; 33 perdas sem motivo revertidas.
+- `v0.255.1` — balcão volta à versão certa + `QuickAcao` sem `value` duplicado.
+
+**Cancelados com medição** (não reabrir sem refazer a conta): U5 fase 3b e
+`fn_mover_estagio_indicacao`.
+
+### 🔴 O que INTERESSA a esta conversa
+1. **A fronteira `gestor` continua SEM DONO.** Papel + policies RLS cruzadas tocam o
+   **mesmo banco** (`bhrxfudnhxqntnnbgyjg`) das duas conversas e nenhuma reivindicou.
+   Proposta da outra frente: **roda no ERP, o app só consome.**
+   ⚠️ **Nenhuma das duas aplica `apply_migration` de `gestor` antes do combinado do Henrique.**
+2. **Contratos:** confirmado que o bloqueio é **jurídico, não técnico** — a estrutura no
+   banco está pronta, mas **não existe texto de contrato DIM+ Saúde** em lugar nenhum
+   (o Gerador de Contratos DIMEG é do DMG Ocupacional, B2B, e não serve).
+   E o 752 engana: **739 são `backfill` de script**, 11 `erp`, 4 `sync` — só 15 vieram de
+   fechamento. Diagnóstico completo em
+   `erp-dimplus/docs/sessions/2026-08-17-diagnostico-contratos-aceite.md`.
