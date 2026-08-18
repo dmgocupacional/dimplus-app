@@ -163,6 +163,32 @@ Balcão e `/api/public/app-cadastro`, `fonte='cadastro'`. Sem isso o buraco dos 
 crescer e a regra menor/maior fica sem base.
 **Pronto quando:** cadastro novo rejeita sem nascimento; nenhum registro novo nasce com NULL.
 
+### S-C · Leitura de dependentes no app — ✅ ENTREGUE 17/08/2026 (v0.5.0 + v0.5.1)
+
+Entregue: `fn_app_meus_dependentes()` no banco, `getMeusDependentes()` + tipos no app, e a
+tela `src/app/dependentes.tsx` (rota EMPILHADA, não aba — (tabs)/ criaria uma quinta aba
+automaticamente). Entrada pelo Perfil.
+
+🔴 **FIX DE SEGURANÇA ENCONTRADO NO CAMINHO (P0, aplicado):** `fn_dependentes_situacao`,
+`fn_dependentes_qtd` e `fn_cliente_titular` são `SECURITY DEFINER`, recebem o titular COMO
+PARÂMETRO e estavam com `EXECUTE` para **public/anon/authenticated**. Com a chave pública do
+app — **inclusive sem login** — dava para passar um uuid arbitrário e ler plano, limite, uso
+e valor de excedente de OUTRO titular. Mesma classe do fix de `fn_mover_estagio_lead`.
+REVOKE aplicado; `service_role` mantido (o único chamador é uma rota do ERP via
+`createAdminClient`, que ignora grants, então o ERP não quebrou).
+A RPC nova NÃO recria o furo: é **sem parâmetro**, resolve o titular do `auth.uid()` dentro
+da função. Se alguém "simplificar" chamando `fn_dependentes_situacao` direto do app, o furo
+volta.
+
+Provado por canária em transação REVERTIDA contra produção: sem sessão → vazio, não erro;
+com sessão de titular real → seus 5 dependentes, limite 5, usados 5, `pode_adicionar` true
+(PLUS/`cobrar`). Rollback conferido, zero resíduo.
+
+🔴 **Nenhum dos 18 titulares com dependentes tem `user_id`** → a tela abre vazia em 100% dos
+casos reais. O estado vazio é o caminho PRINCIPAL, não a exceção.
+
+_(escopo original abaixo)_
+
 ### S-C · Leitura de dependentes no app — `dimplus-app`
 Policy para o titular ver seus dependentes + RPC expondo `fn_dependentes_situacao`.
 **Zero escrita.** Primeira coisa que o usuário nota; entrega valor sozinha.
