@@ -205,12 +205,15 @@ Consequência direta das seções 2–5, para não redescobrir:
    ✅ O login da conta de teste FUNCIONA (token emitido). Não é credencial.
    ✅ A lógica do gate, a derivação de `paciente_id` pelo CPF e a posse fail-closed estão
    corretas e **não precisam ser refeitas** — falta só o transporte da sessão.
-   ⏸️ **O S2 ganha um PRÉ-LOTE no `erp-dimplus`** (aceitar Bearer nessas rotas + isentar do
-   gate de cookie, sem afrouxar nada para o staff). Precedente já existe no repo: `/api/mcp/`
-   se autentica por capability URL e o POST de `/api/webhooks/asaas` por header próprio — o
-   padrão "sai do gate de cookie e se autentica dentro da rota" não é invenção.
-   🔴 **NÃO construir a tela do S2 antes disso.** Seria tela contra contrato nunca exercitado
-   ao vivo — exatamente o padrão que gerou todo bug já achado neste app.
+   ✅ **18/08/2026 — O PRÉ-LOTE FOI ENTREGUE: `erp-dimplus` v0.257.0.**
+   `src/lib/app-feegow-guard.ts` passou a extrair `Authorization: Bearer` com precedência,
+   caindo em cookie como fallback (navegador). Nada foi afrouxado para o staff.
+   ~~NÃO construir a tela do S2 antes disso~~ — **o bloqueio CAIU. Pode construir.**
+   Provado ao vivo com token real da conta de teste:
+   `opcoes` + Bearer → 200 (especialidades reais) · `disponibilidade` + Bearer → 200
+   (horários reais) · `exames/pedidos` + Bearer → 404 "CPF sem cadastro na clínica"
+   (caso REAL, precisa de estado de UI próprio) · sem `Authorization` → 307 ·
+   Bearer inválido → 401.
 
 8. 🟢 **18/08/2026 — DE ONDE O DADO VEM: das rotas REST do `erp-dimplus`, NÃO da Feegow.**
    Esta seção foi escrita descrevendo a forma da tela sem dizer qual é a fonte, e isso deixou
@@ -225,8 +228,36 @@ Consequência direta das seções 2–5, para não redescobrir:
    🔴 **`paciente_id` vem SEMPRE do cliente logado, nunca do body.** Não inventar parâmetro.
    🔴 **Nunca foram exercitadas com sessão de cliente** (em 16/07 não existia nenhuma; hoje
    existem 3). O S2 começa por exercitá-las — é validação de contrato, não integração nova.
-   ⚠️ As flags `agendamento`/`exames` estão `ativo=false` → **403 para todos**. 403 no primeiro
-   teste é a flag, não o gate.
+   ✅ **18/08/2026: as flags `agendamento` e `exames` foram LIGADAS em produção (`ativo=true`)
+   e NÃO foram revertidas** — conferido no banco. Se um dia voltarem a `false`, a rota devolve
+   403 "módulo indisponível para este cliente": comportamento CORRETO, não regressão.
+   (`telemedicina` segue `ativo=false` de propósito — provedor não escolhido.)
    ⚠️ Os itens 1–7 acima **continuam valendo** — a rota entrega o dado cru da Feegow; as
    sentinelas, as duas grafias de `age_restriction` e as salas 26/27 são tratamento nosso.
    📎 Fonte de verdade desta decisão: `erp-dimplus/docs/ROADMAP-APP.md`, seção FASE 2.
+
+9. 🔴 **18/08/2026 — O APP NUNCA FEZ CHAMADA AUTENTICADA AO ERP. O S2 começa por um helper,
+   não por uma tela.**
+   Verificado por grep: `Bearer` e `Authorization` têm **ZERO ocorrências** em `src/`.
+   `API_BASE` (`src/lib/supabase.ts:27`) só é usado em `src/lib/auth.ts:54` e `:70` —
+   `/api/public/app-cadastro` e `/api/public/app-login`, ambas PÚBLICAS, ambas sem header.
+
+   ⚠️ **DE ONDE VEM O TOKEN — decidir antes de codar.** `src/state/session.tsx` **NÃO guarda
+   o `access_token`**: ele mantém `estado`/`cliente`/`modulos`/`faturas`/`rede`, e o
+   `onAuthStateChange` (linha ~87) recebe a sessão mas não a armazena. O comentário logo acima
+   explica que não há `getSession()` no boot de propósito, para não duplicar chamada.
+   Duas saídas:
+   - **(A) `supabase.auth.getSession()` dentro do helper** — não toca no contexto, e o SDK
+     devolve token já renovado. **Recomendada.**
+   - **(B) guardar o token no contexto** — barato (o callback já recebe `sessao`), mas mexe
+     num arquivo sensível ao ciclo de sessão.
+   ❌ **Em nenhuma das duas criar um segundo cliente Supabase** — dois clientes brigam pelo
+   refresh (ver cabeçalho de `src/lib/supabase.ts`).
+
+   **O helper precisa tratar, e cada um é estado de UI diferente:**
+   - `401` → reautenticar. **O ERP NÃO renova token** (sem cookie não há onde gravar):
+     renovar é responsabilidade DO APP.
+   - `403` → módulo desligado (flag), não falha.
+   - `404` → **caso REAL** ("CPF sem cadastro na clínica"), não erro. Item 7 acima.
+   - `307` → faltou o header `Authorization`.
+
