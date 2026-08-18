@@ -92,6 +92,11 @@ export function idadeEm(nascimento: string | null | undefined, referencia: Date)
   // ⚠️ NÃO usar `new Date(s)`: a Feegow entrega nascimento em d-m-Y ("29-04-1964") e
   // `new Date()` nessa forma é Invalid Date SILENCIOSO. Aqui só se aceita ISO, de propósito
   // — a conversão d-m-Y → ISO acontece no backfill, não em runtime de tela.
+  //
+  // 🔴 E existe sentinela de "sem data" na Feegow: `30-11--0001`, com ano NEGATIVO, vista em
+  // 3 pacientes no backfill de 17/08/2026. `new Date()` nela NÃO dá erro — devolve uma data
+  // absurda que passaria pelo CHECK do banco e viraria idade de dois mil anos. O regex ISO
+  // abaixo a rejeita porque exige exatamente 4 dígitos; não relaxar para `\d+`.
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (!m) return null;
   const [, ys, ms, ds] = m;
