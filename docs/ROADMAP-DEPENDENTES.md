@@ -2,8 +2,14 @@
 
 > ⚠️ Este NÃO é o `ROADMAP-APP.md` citado em `src/lib/types.ts`, `src/lib/gate.ts`,
 > `src/theme/tokens.ts` e `src/app/(auth)/login.tsx`. Aquele vive em
-> **`erp-dimplus/docs/ROADMAP-APP.md`** — não existe cópia neste repo. Este arquivo cobre
-> só a linha de dependentes, decidida em 17/08/2026.
+> **`erp-dimplus/docs/ROADMAP-APP.md`** — não existe cópia neste repo.
+>
+> 🔴 **A FONTE DE VERDADE de dependentes é o erp-dimplus**, não este arquivo:
+> `erp-dimplus/docs/ROADMAP.md` §"Dependentes (titular ↔ dependente) — 20/07/2026 · v0.155.1",
+> `erp-dimplus/docs/ROADMAP-APP.md` §"Fronteira ERP × App" e
+> `erp-dimplus/docs/sessions/2026-07-20-dependentes.md`.
+> Este arquivo é a visão do lado app + o sequenciamento de 17/08. Ao divergir, o erp manda.
+> **Revisado contra o erp-dimplus em 17/08/2026** (commit `30f319f`).
 
 Decisões tomadas pelo Henrique em 17/08/2026. Diagnóstico completo em
 `docs/sessions/2026-08-17-dependentes-diagnostico.md`.
@@ -38,6 +44,66 @@ assinatura própria.
 2. **Titular não vê os dependentes.** Única policy de leitura do app é
    `clientes_app_own_select` → `user_id = auth.uid()`; dependente tem `user_id` nulo.
 3. **Não há caminho de escrita do app.** Nenhuma policy de INSERT para `authenticated`.
+
+---
+
+## 🔴 CONFLITO COM DECISÃO ANTERIOR — RESOLVER ANTES DA S-A
+
+Em **20/07/2026** (`erp-dimplus/docs/sessions/2026-07-20-dependentes.md`, "Próximos passos"
+item 1) ficou decidido que o ajuste da assinatura no Asaas **não se faz sem duas condições**:
+
+1. **chave de sandbox do Asaas** — "só existe a de produção hoje; não dá pra provar
+   'sem double-charge' sem mexer em cobrança real de cliente";
+2. **gatilho MANUAL com preview — nunca automático no cadastro.**
+
+O registro fecha com: *"erro aqui vira cobrança errada no cartão de um cliente, e isso não
+tem `git revert`."*
+
+A decisão de **17/08** (titular insere dependente pelo app → gera avulsa e corrige a
+assinatura) é **exatamente o gatilho automático no cadastro** que a de 20/07 proibiu — e
+ainda move o gatilho para a mão do CLIENTE FINAL, não do staff.
+
+**Condição 1 verificada em 17/08: continua NÃO ATENDIDA.** Não existe sandbox do Asaas —
+as únicas env no erp-dimplus são `ASAAS_API_KEY` / `ASAAS_API_URL` (uma só chave), e todo
+"sandbox" nos docs do erp é o **Vercel** (`erp-dimplus-wxyc`), não o Asaas.
+
+**PROPOSTA (pendente de confirmação do Henrique):** a aprovação do staff (S-E) É o "gatilho
+manual com preview". O titular SOLICITA pelo app; o staff vê o preview do valor e aprova; a
+APROVAÇÃO dispara a cobrança. Nada automático, nada na mão do cliente, e o fluxo do app
+continua existindo. Isso satisfaz a condição 2 sem abrir mão da decisão de 17/08.
+A condição 1 (sandbox) segue em aberto e **bloqueia a validação da S-A**.
+
+---
+
+## O QUE JÁ EXISTE NO ERP (levantado em 17/08 — NÃO reconstruir)
+
+- 🔴 **CHECK `clientes_dependente_sem_cobranca_check`**: dependente NÃO PODE ter `asaas_id`,
+  `asaas_subscription_id`, `asaas_adesao_id` nem `plano_id`. É invariante de banco, não
+  convenção. **Confirma que o excedente vai na assinatura DO TITULAR** — e explica o
+  `plano_id` nulo dos 44. Regra do erp: *"ler os CHECKs antes de planejar filtro"*.
+- **`PUT /subscriptions/{id}` JÁ EXISTE** em `src/app/api/asaas/subscription/route.ts`
+  (erp-dimplus). O encanamento está pronto; falta a REGRA de excedente e a idempotência.
+- **UI de dependentes já existe** (v0.154.0 → v0.155.1): bloco de dependentes no cadastro,
+  modal de gerenciar dependentes de cliente já cadastrado, parentesco como lista fixa.
+  A S-E é ADAPTAÇÃO, não construção.
+- **`fn_cliente_adimplente` resolve para o TITULAR** → `fn_cliente_pode` já bloqueia o
+  dependente quando o titular está OVERDUE, **sem mudança no app**. O bloqueio por
+  inadimplência que o Henrique pediu em 17/08 JÁ FUNCIONA.
+- **Dependente já foi previsto com `user_id` e paciente Feegow próprios** desde 20/07, e o
+  ROADMAP-APP já o trata como usuário normal com duas diferenças: **sem financeiro**
+  (`asaas_id` NULL → módulo `financeiro` fica FORA para ele) e adimplência do titular.
+  A decisão de 17/08 (login próprio) **confirma** o desenho existente, não o muda.
+- `reclassificar_status_clientes` é blindado com `WHERE titular_id IS NULL` — sem isso todo
+  dependente virava `churn` a cada sync, em silêncio.
+- Testes de comportamento de 20/07 rodaram contra PROD com rollback: titular limpo →
+  `fn_cliente_pode(dep,'agendamento')` = true; titular OVERDUE → false.
+
+### Pendências herdadas do erp (entram nesta linha)
+- **Nunca testado com dependente real na Feegow** — validar no primeiro caso de produção.
+  Casa com o S2 deste repo.
+- **Métricas de vida** (vidas ativas/bloqueadas, razão vidas/contrato, distribuição por
+  contrato em baldes 0/1-3/4-5/6+): desenhadas em 20/07, **nunca implementadas**. Entram AO
+  LADO dos KPIs de CONTRATO, nunca no lugar.
 
 ---
 
@@ -79,9 +145,12 @@ chamada ser reconhecida como repetição. Mostrar o código da cobrança já fei
 
 ## SPRINTS
 
-### S-A · Cobrança do excedente — `erp-dimplus`
+### S-A · Cobrança do excedente — `erp-dimplus` · ⛔ BLOQUEADA (sandbox do Asaas)
 Vazamento que já existe hoje e independe do app. Os dois caminhos acima + chave única +
 `externalReference`.
+⛔ **Não iniciar sem resolver o conflito acima.** `PUT /subscriptions/{id}` já existe; o que
+falta é a regra de excedente, a idempotência e — principalmente — um jeito de PROVAR
+ausência de double-charge sem cobrar cliente real.
 **Pronto quando:** 6º dependente no PLUS gera avulsa e assinatura corrigida para 109,80;
 segunda tentativa falha no banco e devolve o código da cobrança já feita; SAG/OZ seguem
 barrando.
@@ -99,6 +168,9 @@ Policy para o titular ver seus dependentes + RPC expondo `fn_dependentes_situaca
 **Zero escrita.** Primeira coisa que o usuário nota; entrega valor sozinha.
 **Pronto quando:** titular vê a lista e "3 de 5 usados"; titular sem dependente vê estado
 vazio CORRETO, não erro.
+⚠️ Se a decisão de 17/08 valer (dependente MAIOR tem login próprio e **o titular PERDE acesso
+a resultados e visualizações**), esta sprint mostra ao titular apenas a EXISTÊNCIA e a
+contagem — nunca resultado de exame ou agenda de dependente maior. A lista é cadastral.
 
 ### S-D · Solicitação de inclusão — `dimplus-app` + `erp-dimplus`
 Tabela `dependente_solicitacoes` no molde de `app_acesso_solicitacoes` (`status` default
@@ -119,14 +191,28 @@ motivo e o titular vê.
 
 ### S-F · Login próprio do dependente maior — `dimplus-app`
 Só depois da S-B rodando: é ela que garante a data que decide o trilho.
+Desenho JÁ previsto no erp desde 20/07 (dependente com `user_id` e paciente Feegow próprios).
+🔴 **O módulo `financeiro` fica FORA do dependente** — `asaas_id` é NULL por CHECK, então sem
+faturas, sem 2ª via, sem assinatura. Lista vazia ali é estado CORRETO, não falha (já está
+documentado em `src/lib/types.ts`).
 
 ---
 
 ## ORDEM RECOMENDADA
 
-**S-A → S-B** primeiro (é dinheiro vazando hoje, e independe de tudo), com o **S2
-(agendamento)** correndo em paralelo no app — ele está desbloqueado desde que a idade foi
-resolvida, e não depende de nenhuma sprint desta lista.
+⚠️ **A ordem de 17/08 (S-A primeiro) foi CORRIGIDA**: a S-A está bloqueada por dependência
+externa (sandbox do Asaas), não por engenharia. Puxá-la para a frente da fila pararia a fila.
+
+Ordem revisada:
+1. **S-B** (nascimento obrigatório) — desbloqueada, barata, e é pré-requisito do trilho
+   menor/maior. Lidera.
+2. **S-C** (leitura no app) — desbloqueada, entrega valor sozinha, zero escrita.
+3. **S-A** quando a sandbox for resolvida (ou quando o Henrique aceitar a proposta de gatilho
+   manual via S-E como substituto da condição 2).
+4. **S-D → S-E → S-F.**
+
+O **S2 (agendamento)** corre em paralelo no app: está desbloqueado desde que a idade foi
+resolvida e não depende de nenhuma sprint desta lista.
 
 S-A e S-B são `erp-dimplus`; S-C em diante são o app. **1 conversa = 1 repo**: S-A/S-B pedem
 sessão própria no erp-dimplus.
