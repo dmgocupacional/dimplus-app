@@ -46,6 +46,17 @@ export type Cliente = {
    * Lista vazia aqui é ESTADO CORRETO, não falha de carregamento.
    */
   dependente: boolean;
+  /**
+   * `clientes.data_nascimento` (ISO `AAAA-MM-DD`) — coluna criada em 17/08/2026. Antes disso
+   * NÃO existia nascimento em nenhuma tabela do banco, e sem ele o `age_restriction` da
+   * Feegow não podia ser aplicado.
+   *
+   * ⚠️ NULL é comum e NÃO é falha: 271 dos 809 clientes seguem sem data (são os sem
+   * `feegow_paciente_id`, de onde vem a semente) — e os 44 DEPENDENTES estão TODOS aí.
+   * Ver `data_nascimento_fonte` no banco para distinguir "nunca tentamos" de "a origem não
+   * tinha". Consumir sempre via `idadeEm`, que devolve `null` em vez de chutar.
+   */
+  data_nascimento: string | null;
 };
 
 /** app_features (flag global) já resolvida com o override de cliente_app_features. */

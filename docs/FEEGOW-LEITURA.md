@@ -122,9 +122,48 @@ Não se resolve vinculando conta de teste: é coluna ausente para 809 clientes.
 3. **Não filtrar por idade no S2** — barato, mas entrega tela que oferece horário
    inservível. Se for esta, que seja escolha REGISTRADA, não descuido herdado.
 
-Em 17/08 o Henrique sinalizou que o caminho já estava bom; o item continua aberto aqui
-porque a ausência da coluna é fato de schema, e a decisão sobre conviver com ela ainda
-não foi tomada explicitamente.
+### ✅ 6.2-bis RESOLVIDO em 17/08/2026 — decisão: COLUNA PRÓPRIA, semeada da Feegow
+
+Escolhido o caminho 2 (não o 1, não o 3): a idade é regra de negócio NOSSA, então o dado
+vive no nosso banco. Ler on-demand da Feegow foi recusado porque cobre só os vinculados,
+não cobre cliente novo, e põe chamada externa no caminho de render.
+
+Feito:
+- `clientes.data_nascimento date` + `clientes.data_nascimento_fonte text`
+  (`feegow|cadastro|manual`), com CHECK de sanidade (`> 1900-01-01`, `< current_date`) e
+  CHECK de domínio na fonte. A coluna de FONTE distingue NULL "nunca tentamos" de NULL
+  "tentamos e a origem não tinha" — sem ela não há como saber quem precisa de ação humana.
+- Backfill dos 538 vinculados via `feegow_paciente_detalhe`. Resultado REAL:
+  **531 com data · 4 vazias na origem · 3 sentinela**. Os 7 sem data ficaram com
+  `fonte='feegow'` e `data_nascimento` NULL, de propósito.
+- Script retomável versionado em `scripts/backfill-nascimento.mjs`.
+
+🔴 **O QUE O BACKFILL NÃO RESOLVEU, e é o caso que mais importa:**
+os **271 sem `feegow_paciente_id` seguem sem idade — e os 44 DEPENDENTES estão TODOS nesse
+grupo (0 dependentes com data)**. Dependente é justamente quem pode ser criança. Ou seja o
+público PEDIÁTRICO é 100% do que ficou de fora, e nenhuma quantidade de backfill via Feegow
+resolve isso: só a captura no cadastro (passo 3, no erp-dimplus) resolve.
+Consequência de projeto: o caminho "idade desconhecida" NÃO é exceção rara e não pode ser
+empty state — tem que mostrar o profissional com a faixa ROTULADA.
+
+Distribuição de quem tem data: 529 adultos, 2 menores de 16, idade média 51. Pediatra é
+ruído para 99,6% de quem já tem idade conhecida.
+
+🔴 **Pegadinhas confirmadas no backfill** (não redescobrir):
+- A Feegow devolve `nascimento` em **d-m-Y** (`"29-04-1964"`). `new Date()` nisso é
+  `Invalid Date` silencioso — parse por split, sempre.
+- Existe sentinela de "sem data": **`30-11--0001`** (ano NEGATIVO), vista em 3 pacientes.
+  `new Date()` nela NÃO dá erro: dá data absurda que passaria pelo CHECK e viraria idade de
+  dois mil anos. Rejeitar explicitamente.
+- Rate limit do MCP vem como **JSON puro `{"error":"rate limit"}`, sem envelope SSE** — quem
+  só procura a linha `data:` classifica "espere um pouco" como "dado ruim". Lotes de ~110.
+- Duas datas extremas entraram e são plausíveis, não lixo: `2026-03-06` (bebê) e `1923-01-27`
+  (103 anos). Não "corrigir".
+
+O consumo no app está em `src/lib/idade.ts` (v0.4.0): `idadeEm` calcula na **data do
+agendamento**, não hoje — quem faz 18 na semana que vem muda de faixa; `atendeFaixa`
+devolve `null` para idade desconhecida, **distinto de `false`**, porque colapsar os dois
+esconderia o pediatra de 100% dos dependentes.
 
 ## 7. O que NÃO foi executado (e por quê)
 

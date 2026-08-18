@@ -20,7 +20,7 @@ export async function getCliente(): Promise<Cliente | null> {
   const { data, error } = await supabase
     .from('clientes')
     .select(
-      'id, nome, cpf_cnpj, telefone, app_acesso, data_adesao, created_at, subscription_next_due, titular_id, planos:plano_id (nome)'
+      'id, nome, cpf_cnpj, telefone, app_acesso, data_adesao, created_at, subscription_next_due, titular_id, data_nascimento, planos:plano_id (nome)'
     )
     .limit(1)
     .maybeSingle();
@@ -43,6 +43,9 @@ export async function getCliente(): Promise<Cliente | null> {
     membro_desde: data.data_adesao ?? data.created_at ?? '',
     proximo_vencimento: data.subscription_next_due ?? null,
     dependente: data.titular_id !== null,
+    // NULL aqui é estado legítimo (271 clientes, incluindo TODOS os dependentes) — quem
+    // consome usa `idadeEm`, que devolve null em vez de assumir idade. → BLOCO: IDADE E RESTRIÇÃO DE FAIXA
+    data_nascimento: data.data_nascimento ?? null,
   };
 }
 
