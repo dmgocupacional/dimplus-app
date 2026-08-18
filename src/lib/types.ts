@@ -111,3 +111,51 @@ export type Parceiro = {
   cidade: string;
 };
 // ── FIM BLOCO ──
+
+// ═══ BLOCO: DEPENDENTES (S-C) ═══
+// Espelha `fn_app_meus_dependentes()`. A RPC é SECURITY DEFINER e NÃO recebe parâmetro:
+// o titular sai do `auth.uid()` DENTRO da função. Isso é deliberado — `fn_dependentes_situacao`
+// recebe o titular como argumento e, com EXECUTE aberto, permitia ler o de OUTRA pessoa
+// (corrigido em 17/08 por REVOKE). Se algum dia alguém for "simplificar" chamando a função
+// do banco direto do app: NÃO. É esse parâmetro que era o furo.
+
+/**
+ * Um dependente do titular logado, com a situação do plano JÁ RESOLVIDA pelo banco.
+ *
+ * ⚠️ Só dado CADASTRAL. Nunca exame, agenda ou financeiro: por decisão de 17/08/2026 o
+ * dependente MAIOR de idade tem login próprio e o titular PERDE acesso aos resultados dele.
+ * Não acrescentar campo clínico aqui sem rever essa decisão.
+ */
+export type Dependente = {
+  id: string;
+  nome: string;
+  /** Lista fixa no ERP (v0.155.1). Pode ser null em cadastro antigo. */
+  parentesco: string | null;
+  /**
+   * ⚠️ NULL é o caso NORMAL, não exceção: em 17/08/2026 os 44 dependentes da base estavam
+   * TODOS sem data — eles são justamente os que não têm `feegow_paciente_id`, de onde veio a
+   * semente do backfill. Sem data não dá para classificar menor/maior; não assumir nenhum
+   * dos dois. Ver `idadeEm` em `src/lib/idade.ts`.
+   */
+  data_nascimento: string | null;
+  app_acesso: AppAcesso;
+};
+
+/**
+ * Situação do plano do titular quanto a dependentes. Vem de `fn_dependentes_situacao` no
+ * banco — ⚠️ NUNCA recalcular limite ou valor no app: os números são editáveis em
+ * `/dashboard/planos` do ERP e hardcodar aqui os congela (INVARIANTES.md §5 do erp-dimplus).
+ */
+export type DependentesSituacao = {
+  limite: number;
+  usados: number;
+  /**
+   * Já considera a política do plano: `false` quando é `barrar` e o limite estourou.
+   * Quando é `cobrar`, vem `true` MESMO no limite — e aí o próximo dependente custa
+   * `valor_unitario` por mês. A tela tem que dizer o valor ANTES de deixar solicitar.
+   */
+  pode_adicionar: boolean;
+  politica: 'cobrar' | 'barrar' | (string & {});
+  valor_unitario: number;
+};
+// ── FIM BLOCO ──

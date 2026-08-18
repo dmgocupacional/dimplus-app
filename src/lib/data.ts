@@ -11,7 +11,16 @@
 // distinguir "sem sessão", "sessão sem cliente" (aguardando aprovação) e "sessão com cliente".
 
 import { supabase } from './supabase';
-import type { Cliente, Fatura, Modulo, ModuloKey, Parceiro, PagamentoStatus } from './types';
+import type {
+  Cliente,
+  Dependente,
+  DependentesSituacao,
+  Fatura,
+  Modulo,
+  ModuloKey,
+  Parceiro,
+  PagamentoStatus,
+} from './types';
 
 // ─── Cliente ────────────────────────────────────────────────────────────────
 // A policy `clientes_app_own_select` filtra por `user_id = auth.uid()`, então não é preciso
@@ -164,4 +173,68 @@ export async function getRede(): Promise<Parceiro[]> {
 
 /** A tela usa isto para mostrar o rodapé de "rede em expansão" sem chutar o motivo. */
 export const REDE_E_MOCK = true;
+// ── FIM BLOCO ──
+
+// ─── Dependentes (S-C) ──────────────────────────────────────────────────────
+// Leitura pura. A inclusão (S-D) NÃO passa por aqui: ela vai virar solicitação com
+// aprovação de staff, nunca INSERT direto em `clientes` pelo app.
+
+export type MeusDependentes = {
+  lista: Dependente[];
+  situacao: DependentesSituacao | null;
+};
+
+/**
+ * Dependentes do titular logado + a situação do plano.
+ *
+ * A RPC não recebe parâmetro de propósito (ver BLOCO: DEPENDENTES em types.ts).
+ *
+ * ⚠️ `situacao` é null quando a RPC não devolve linha, e isso acontece em DOIS casos
+ * diferentes que a tela precisa distinguir do erro: titular sem nenhum dependente, e sessão
+ * sem cliente vinculado. Nos dois, lista vazia é ESTADO CORRETO — não tentar retry.
+ *
+ * 🔴 Em 17/08/2026 NENHUM dos 18 titulares com dependentes tinha login (`user_id`), então
+ * em produção esta tela nasce vazia em 100% dos casos reais. O estado vazio não é caminho
+ * de exceção aqui: é o único caminho até o primeiro titular com dependente ganhar acesso.
+ */
+export async function getMeusDependentes(): Promise<MeusDependentes> {
+  const { data, error } = await supabase.rpc('fn_app_meus_dependentes');
+
+  if (error || !data || data.length === 0) return { lista: [], situacao: null };
+
+  const linhas = data as {
+    dependente_id: string;
+    nome: string | null;
+    parentesco: string | null;
+    data_nascimento: string | null;
+    app_acesso: string | null;
+    limite: number | null;
+    usados: number | null;
+    pode_adicionar: boolean | null;
+    politica: string | null;
+    valor_unitario: number | string | null;
+  }[];
+
+  // A situação vem repetida em toda linha (cross join no banco). Ler da primeira.
+  const p = linhas[0];
+  const situacao: DependentesSituacao = {
+    limite: p.limite ?? 0,
+    usados: p.usados ?? linhas.length,
+    pode_adicionar: p.pode_adicionar ?? false,
+    politica: (p.politica ?? 'barrar') as DependentesSituacao['politica'],
+    // `numeric` do Postgres chega como STRING no supabase-js — Number() aqui evita
+    // "29.90" virar concatenação em vez de soma na tela.
+    valor_unitario: Number(p.valor_unitario ?? 0),
+  };
+
+  const lista: Dependente[] = linhas.map((l) => ({
+    id: l.dependente_id,
+    nome: l.nome ?? '',
+    parentesco: l.parentesco ?? null,
+    data_nascimento: l.data_nascimento ?? null,
+    app_acesso: (l.app_acesso ?? 'bloqueado') as Dependente['app_acesso'],
+  }));
+
+  return { lista, situacao };
+}
 // ── FIM BLOCO ──
