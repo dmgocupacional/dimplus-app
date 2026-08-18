@@ -230,15 +230,46 @@ documentado em `src/lib/types.ts`).
 externa (sandbox do Asaas), não por engenharia. Puxá-la para a frente da fila pararia a fila.
 
 Ordem revisada:
-1. **S-B** (nascimento obrigatório) — desbloqueada, barata, e é pré-requisito do trilho
-   menor/maior. Lidera.
-2. **S-C** (leitura no app) — desbloqueada, entrega valor sozinha, zero escrita.
+1. ~~**S-B**~~ · 2. ~~**S-C**~~ ✅ **S-C ENTREGUE em 17/08.** S-B segue viva, no erp.
 3. **S-A** quando a sandbox for resolvida (ou quando o Henrique aceitar a proposta de gatilho
    manual via S-E como substituto da condição 2).
 4. **S-D → S-E → S-F.**
 
-O **S2 (agendamento)** corre em paralelo no app: está desbloqueado desde que a idade foi
-resolvida e não depende de nenhuma sprint desta lista.
+---
+
+## 🟢 ORDEM VIGENTE — reconciliada em 18/08/2026
+
+As quatro filas (`PLANO-MESTRE`, `ROADMAP-APP`, este arquivo, `ROADMAP-CENTRAL`) foram lidas
+juntas. **Esta trilha de dependentes não é uma fila separada** — ela se intercala com o S2.
+Duas travas caíram:
+
+- 🟢 **O Bloco Z não bloqueia mais o app.** O item 13 do `PLANO-MESTRE` dizia que o
+  `dimplus-app` não recebia feature nova enquanto o Z estivesse aberto. O **Z0 — o único item
+  do Z que era risco para o app — está fechado**; o resto é ERP e operação na tela da Feegow.
+  🔴 A trava já tinha sido furada sem registro: a **S-C foi entregue com o Z aberto.**
+- 🟢 **Garfo do S2 decidido: o app consome as rotas REST do `erp-dimplus`** (que já existem
+  desde 16/07), não a Feegow direto. Ver `docs/FEEGOW-LEITURA.md` §8.
+
+**No app (este repo), nesta ordem:**
+1. **S2 · agendamento read-only** — começa exercitando `opcoes` + `disponibilidade` com a
+   conta de teste. É validação de contrato existente, não integração nova.
+2. **S-D** · solicitação de inclusão de dependente.
+3. **S-F** · login do dependente maior — **só depois da S-B rodar no erp**.
+4. **S4** escrita na Feegow (só após o S2 em device) · **S5** build/submit.
+
+**No `erp-dimplus` (sessão própria — 1 conversa = 1 repo):**
+**Z1** (as 45 indicações à mão) → **S-B** → **U2 Lote D** → resto da ORDEM VIGENTE de lá.
+
+**Fora de fila, dependência de terceiro:** **S-A** (não existe sandbox do Asaas) ·
+**S3 aceite** (`contrato_termos` = 0, texto é de advogado) · telemedicina (sem provedor).
+Não sequenciar como se fosse trabalho de código.
+
+🔵 **Medido em produção em 18/08:** dependentes **44**, com `data_nascimento` **0 de 44** ·
+titulares sem nascimento **237** · clientes com `user_id` **3** · liberados **3** ·
+`feegow_paciente_id` **538** · `contrato_termos` **0**.
+🔴 O **0 de 44** é o argumento da S-B com número: a classificação menor/maior é
+**inverificável** para toda a base legada de dependentes, e continua assim até a S-B rodar.
+🔴 **Z1 andou para trás: 42 → 45.** É trabalho manual (Henrique + Sandra) e trava o U2 Lote D.
 
 S-A e S-B são `erp-dimplus`; S-C em diante são o app. **1 conversa = 1 repo**: S-A/S-B pedem
 sessão própria no erp-dimplus.

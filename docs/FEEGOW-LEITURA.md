@@ -191,3 +191,22 @@ Consequência direta das seções 2–5, para não redescobrir:
 5. `age_restriction` lido nas **duas** grafias (seção 4).
 6. Sentinelas `0`/`127` não exibidas como faixa (seção 4).
 7. Caminho explícito para cliente sem `feegow_paciente_id` (seção 6.1).
+
+8. 🟢 **18/08/2026 — DE ONDE O DADO VEM: das rotas REST do `erp-dimplus`, NÃO da Feegow.**
+   Esta seção foi escrita descrevendo a forma da tela sem dizer qual é a fonte, e isso deixou
+   um garfo em aberto que só apareceu ao ler os dois repos juntos. Fechado:
+   `GET /api/feegow/agendamento/opcoes` · `.../disponibilidade` · `GET|POST .../agendamento` ·
+   `POST .../cancelar` · `POST .../reagendar` — **já existem em produção desde 16/07
+   (erp-dimplus v0.147.0)**, atrás da guarda única `src/lib/app-feegow-guard.ts`
+   (`auth → fn_cliente_do_usuario → fn_cliente_pode → CPF → paciente_id`, com posse
+   fail-closed em cancelar/reagendar/laudo).
+   **Razão da escolha:** o token da Feegow não vai para o device, e o gate já está escrito.
+   Falar com a Feegow direto do app duplicaria gate e posse no cliente — onde eles não valem.
+   🔴 **`paciente_id` vem SEMPRE do cliente logado, nunca do body.** Não inventar parâmetro.
+   🔴 **Nunca foram exercitadas com sessão de cliente** (em 16/07 não existia nenhuma; hoje
+   existem 3). O S2 começa por exercitá-las — é validação de contrato, não integração nova.
+   ⚠️ As flags `agendamento`/`exames` estão `ativo=false` → **403 para todos**. 403 no primeiro
+   teste é a flag, não o gate.
+   ⚠️ Os itens 1–7 acima **continuam valendo** — a rota entrega o dado cru da Feegow; as
+   sentinelas, as duas grafias de `age_restriction` e as salas 26/27 são tratamento nosso.
+   📎 Fonte de verdade desta decisão: `erp-dimplus/docs/ROADMAP-APP.md`, seção FASE 2.
