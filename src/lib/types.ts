@@ -265,4 +265,21 @@ export type MeuAgendamento = {
   profissionalNome: string | null;
   especialidadeNome: string | null;
 };
+
+/**
+ * `GET /api/feegow/agendamento/procedimentos` (S2-L4b, erp-dimplus v0.258.0) →
+ * `{ especialidades, procedimentos, consulta_por_especialidade }`. Preço JÁ na tabela
+ * DIM+ (o erp resolve isso, o app nunca vê o particular).
+ *
+ * ⚠️ `consultaPorEspecialidade` só tem entrada pras especialidades com vínculo OFICIAL
+ * confiável na Feegow — o erp já descarta o `consulta_id` default errado (30 das 39
+ * especialidades apontavam pro mesmo procedimento genérico antes desse tratamento).
+ * Especialidade AUSENTE do mapa = sem caminho de "criar" pelo app pra ela ainda; não
+ * inventar procedimento nesse caso.
+ */
+export type CatalogoProcedimentos = {
+  especialidades: { id: number; nome: string }[];
+  procedimentos: { id: number; nome: string; valor_centavos?: number }[];
+  consultaPorEspecialidade: Map<number, number>;
+};
 // ── FIM BLOCO ──

@@ -10,7 +10,15 @@
 
 import { lerRestricaoIdade, type FaixaIdade } from './idade';
 import { chamarFeegow, type FeegowResultado } from './feegowApi';
-import type { Especialidade, LocalAgenda, MeuAgendamento, Profissional, SlotDisponibilidade, Unidade } from './types';
+import type {
+  CatalogoProcedimentos,
+  Especialidade,
+  LocalAgenda,
+  MeuAgendamento,
+  Profissional,
+  SlotDisponibilidade,
+  Unidade,
+} from './types';
 
 // ─── Helpers de leitura defensiva ───────────────────────────────────────────
 
@@ -265,12 +273,6 @@ export async function getMeusAgendamentos(): Promise<FeegowResultado<MeuAgendame
 // (`pacientePossuiAgendamento`, fail-closed) — aqui só repassamos o `agendamento_id`;
 // não há checagem de posse redundante no app porque ela não teria como ser confiável
 // (o app não vê a lista "crua" da Feegow, só o que o erp já filtrou).
-//
-// 🔴 Criar agendamento NÃO está neste lote — bloqueado por dois problemas do lado do
-// erp-dimplus (fora deste repo): (1) não existe rota de catálogo de procedimentos pro
-// app, e `procedimento_id` é obrigatório pra criar; (2) a rota `POST /agendamento` do
-// erp não passa `tabela_id` pra `criarAgendamentoFeegow`, o que faria o agendamento
-// nascer no PARTICULAR CHEIO em vez do preço DIM+. Ver handoff da sessão.
 
 export async function cancelarAgendamento(
   agendamentoId: number,
@@ -292,6 +294,97 @@ export async function reagendarAgendamento(
   const r = await chamarFeegow<{ ok: boolean }>('/api/feegow/agendamento/reagendar', {
     method: 'POST',
     body: { agendamento_id: agendamentoId, data, horario },
+  });
+  if (!r.ok) return r;
+  return { ok: true, dados: { ok: true } };
+}
+
+// ─── Criar (S2-L4b) ──────────────────────────────────────────────────────────
+//
+// Desbloqueado em 20/08/2026: `erp-dimplus` v0.258.0 passou a ter a rota de catálogo
+// de procedimentos e a passar `tabela_id` (preço DIM+) na criação — ver
+// `docs/sessions/2026-08-19-s2-l4-cancelar-remarcar.md` pro histórico do bloqueio.
+//
+// `procedimento_id` NUNCA é escolhido livremente pelo cliente nesta primeira versão:
+// vem de `consultaPorEspecialidade`, resolvido no erp a partir do vínculo OFICIAL
+// `consulta_id` da especialidade (não o texto do nome). Especialidade sem vínculo
+// confiável não aparece como agendável por criação — ver `podeAgendarCriacao`.
+
+function normalizarCatalogoProcedimentos(cru: {
+  especialidades: unknown;
+  procedimentos: unknown;
+  consulta_por_especialidade: unknown;
+}): CatalogoProcedimentos {
+  const especialidades = (Array.isArray(cru.especialidades) ? cru.especialidades : [])
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const o = item as Record<string, unknown>;
+      const id = paraNumero(o.id);
+      const nome = paraTexto(o.nome);
+      if (id === null || nome === null) return null;
+      return { id, nome };
+    })
+    .filter((e): e is { id: number; nome: string } => e !== null);
+
+  const procedimentos = (Array.isArray(cru.procedimentos) ? cru.procedimentos : [])
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const o = item as Record<string, unknown>;
+      const id = paraNumero(o.id);
+      const nome = paraTexto(o.nome);
+      if (id === null || nome === null) return null;
+      const valor = paraNumero(o.valor_centavos);
+      return { id, nome, ...(valor !== null ? { valor_centavos: valor } : {}) };
+    })
+    .filter((p): p is { id: number; nome: string; valor_centavos?: number } => p !== null);
+
+  const consultaPorEspecialidade = new Map<number, number>();
+  const bruto = cru.consulta_por_especialidade;
+  if (bruto && typeof bruto === 'object') {
+    for (const [chave, valor] of Object.entries(bruto as Record<string, unknown>)) {
+      const espId = paraNumero(chave);
+      const procId = paraNumero(valor);
+      if (espId !== null && procId !== null) consultaPorEspecialidade.set(espId, procId);
+    }
+  }
+
+  return { especialidades, procedimentos, consultaPorEspecialidade };
+}
+
+export async function getProcedimentos(): Promise<FeegowResultado<CatalogoProcedimentos>> {
+  const r = await chamarFeegow<{
+    especialidades: unknown;
+    procedimentos: unknown;
+    consulta_por_especialidade: unknown;
+  }>('/api/feegow/agendamento/procedimentos');
+  if (!r.ok) return r;
+  return { ok: true, dados: normalizarCatalogoProcedimentos(r.dados) };
+}
+
+/** Só true quando dá pra criar agendamento por essa especialidade SEM inventar
+ * procedimento — ou seja, quando ela tem vínculo oficial confiável no catálogo. */
+export function podeAgendarCriacao(catalogo: CatalogoProcedimentos, especialidadeId: number): boolean {
+  return catalogo.consultaPorEspecialidade.has(especialidadeId);
+}
+
+export async function criarAgendamento(a: {
+  localId: number;
+  profissionalId: number;
+  especialidadeId: number;
+  procedimentoId: number;
+  data: string; // AAAA-MM-DD
+  horario: string; // HH:MM ou HH:MM:SS
+}): Promise<FeegowResultado<{ ok: true }>> {
+  const r = await chamarFeegow<{ ok: boolean }>('/api/feegow/agendamento', {
+    method: 'POST',
+    body: {
+      local_id: a.localId,
+      profissional_id: a.profissionalId,
+      especialidade_id: a.especialidadeId,
+      procedimento_id: a.procedimentoId,
+      data: a.data,
+      horario: a.horario,
+    },
   });
   if (!r.ok) return r;
   return { ok: true, dados: { ok: true } };

@@ -1,10 +1,16 @@
-// ═══ BLOCO: TELA — AGENDAR (S2-L3) ═══
+// ═══ BLOCO: TELA — AGENDAR (S2-L3 leitura + S2-L4b criar) ═══
 //
-// Leitura: escolhe especialidade → mostra horários dos próximos
+// Escolhe especialidade → mostra profissionais com horário nos próximos
 // `JANELA_DISPONIBILIDADE_DIAS` dias, agrupados por UNIDADE (nunca por sala — §5 do
-// FEEGOW-LEITURA) e por profissional. Sem escrita — criar/cancelar/remarcar é o S2-L4.
+// FEEGOW-LEITURA) → escolhe profissional (abre slots de data/horário, mesmo padrão da
+// remarcação em `meus-agendamentos.tsx`) → confirma → cria.
 //
-// 🔴 Regras que este arquivo tem que respeitar (itens 1-7 do §8):
+// 🔴 `procedimento_id` NUNCA é escolha livre nesta versão: vem de
+// `catalogo.consultaPorEspecialidade`, resolvido no erp a partir do vínculo OFICIAL da
+// Feegow. Especialidade sem esse vínculo confiável (`podeAgendarCriacao` false) mostra
+// aviso e não deixa prosseguir — não inventa procedimento.
+//
+// 🔴 Regras que este arquivo tem que respeitar (itens 1-7 do §8 do FEEGOW-LEITURA):
 //   1. especialidade escolhida ANTES de consultar horário — nunca "lista tudo".
 //   4. `[]` (sem horário) não é erro — já vira "sem vaga" antes de chegar aqui.
 //   5. idade DESCONHECIDA (`atendeFaixa` devolve `null`) MOSTRA o profissional com a
@@ -13,10 +19,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
-import { getDisponibilidade, getOpcoes, type Opcoes } from '@/lib/agendamento';
+import {
+  criarAgendamento,
+  getDisponibilidade,
+  getOpcoes,
+  getProcedimentos,
+  podeAgendarCriacao,
+  type Opcoes,
+} from '@/lib/agendamento';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
 import { formatData } from '@/lib/format';
 import { atendeFaixa, idadeEm, rotuloFaixa } from '@/lib/idade';
@@ -31,6 +44,35 @@ type Etapa =
   | { fase: 'carregando_horarios'; opcoes: Opcoes; especialidade: Especialidade }
   | { fase: 'erro_horarios'; opcoes: Opcoes; especialidade: Especialidade; tipo: FeegowErroTipo; mensagem: string }
   | { fase: 'horarios'; opcoes: Opcoes; especialidade: Especialidade; slots: SlotDisponibilidade[] };
+
+/** Sub-fluxo de criação — mesmo padrão da remarcação em `meus-agendamentos.tsx`: vive
+ * sobre a mesma tela, não é navegação. Os slots do profissional escolhido já vêm da
+ * mesma busca de disponibilidade da tela (não refaz a chamada). */
+type Criacao =
+  | { fase: 'escolher_slot'; especialidade: Especialidade; grupo: GrupoProfissional; slots: SlotDisponibilidade[] }
+  | {
+      fase: 'carregando_catalogo';
+      especialidade: Especialidade;
+      grupo: GrupoProfissional;
+      slot: SlotDisponibilidade;
+    }
+  | { fase: 'erro_catalogo'; especialidade: Especialidade; tipo: FeegowErroTipo; mensagem: string }
+  | { fase: 'sem_vinculo'; especialidade: Especialidade }
+  | {
+      fase: 'confirmando';
+      especialidade: Especialidade;
+      grupo: GrupoProfissional;
+      slot: SlotDisponibilidade;
+      procedimentoId: number;
+      slotsRestantes: SlotDisponibilidade[]; // pra "Voltar" não perder a lista
+    }
+  | {
+      fase: 'criando';
+      grupo: GrupoProfissional;
+      slot: SlotDisponibilidade;
+      procedimentoId: number;
+    }
+  | { fase: 'erro_criar'; mensagem: string };
 
 function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
   switch (tipo) {
@@ -67,6 +109,7 @@ type GrupoProfissional = {
 export default function Agendar() {
   const { cliente } = useSession();
   const [etapa, setEtapa] = useState<Etapa>({ fase: 'carregando_opcoes' });
+  const [criacao, setCriacao] = useState<Criacao | null>(null);
 
   const carregarOpcoes = useCallback(async () => {
     setEtapa({ fase: 'carregando_opcoes' });
@@ -91,6 +134,126 @@ export default function Agendar() {
       return;
     }
     setEtapa({ fase: 'horarios', opcoes, especialidade, slots: r.dados });
+  }
+
+  // ── Sub-fluxo de criação (S2-L4b) ────────────────────────────────────────
+
+  function iniciarCriacao(especialidade: Especialidade, grupo: GrupoProfissional, todosSlots: SlotDisponibilidade[]) {
+    const slotsDoProfissional = todosSlots
+      .filter((sl) => sl.profissionalId === grupo.profissionalId)
+      .slice()
+      .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
+    setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsDoProfissional });
+  }
+
+  async function escolherSlot(
+    especialidade: Especialidade,
+    grupo: GrupoProfissional,
+    slot: SlotDisponibilidade,
+    slotsRestantes: SlotDisponibilidade[]
+  ) {
+    setCriacao({ fase: 'carregando_catalogo', especialidade, grupo, slot });
+    const r = await getProcedimentos();
+    if (!r.ok) {
+      setCriacao({ fase: 'erro_catalogo', especialidade, tipo: r.tipo, mensagem: r.mensagem });
+      return;
+    }
+    if (!podeAgendarCriacao(r.dados, especialidade.id)) {
+      setCriacao({ fase: 'sem_vinculo', especialidade });
+      return;
+    }
+    // seguro pelo `podeAgendarCriacao` acima: a chave existe no mapa.
+    const procedimentoId = r.dados.consultaPorEspecialidade.get(especialidade.id)!;
+    confirmarCriacao(especialidade, grupo, slot, procedimentoId, slotsRestantes);
+  }
+
+  function confirmarCriacao(
+    especialidade: Especialidade,
+    grupo: GrupoProfissional,
+    slot: SlotDisponibilidade,
+    procedimentoId: number,
+    slotsRestantes: SlotDisponibilidade[]
+  ) {
+    setCriacao({ fase: 'confirmando', especialidade, grupo, slot, procedimentoId, slotsRestantes });
+    const nomeProf = grupo.tratamento ? `${grupo.tratamento} ${grupo.nome}` : grupo.nome;
+    Alert.alert(
+      'Confirmar agendamento?',
+      `${especialidade.nome} com ${nomeProf}\n${formatData(slot.data)} às ${slot.horario.slice(0, 5)}`,
+      [
+        {
+          text: 'Voltar',
+          style: 'cancel',
+          onPress: () => setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsRestantes }),
+        },
+        { text: 'Confirmar', onPress: () => executarCriacao(grupo, slot, procedimentoId, especialidade) },
+      ]
+    );
+  }
+
+  async function executarCriacao(
+    grupo: GrupoProfissional,
+    slot: SlotDisponibilidade,
+    procedimentoId: number,
+    especialidade: Especialidade
+  ) {
+    setCriacao({ fase: 'criando', grupo, slot, procedimentoId });
+    const r = await criarAgendamento({
+      localId: slot.localId,
+      profissionalId: grupo.profissionalId,
+      especialidadeId: especialidade.id,
+      procedimentoId,
+      data: slot.data,
+      horario: slot.horario,
+    });
+    if (!r.ok) {
+      Alert.alert('Não foi possível agendar', mensagemErro(r.tipo, r.mensagem));
+      setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: [] }); // não repete a busca — evita martelar a API
+      return;
+    }
+    setCriacao(null);
+    router.push('/meus-agendamentos' as never);
+  }
+
+  // ── Sub-tela de criação, sobrepõe o fluxo normal enquanto ativa ──
+  if (criacao) {
+    return (
+      <Screen titulo="Escolher horário" scroll={criacao.fase === 'escolher_slot'}>
+        <Pressable onPress={() => setCriacao(null)} style={s.voltar}>
+          <Ionicons name="chevron-back" size={18} color={color.navy} />
+          <Text style={s.voltarTxt}>Voltar</Text>
+        </Pressable>
+
+        {criacao.fase === 'carregando_catalogo' || criacao.fase === 'confirmando' || criacao.fase === 'criando' ? (
+          <ActivityIndicator color={color.navy} style={{ marginTop: space.xl }} />
+        ) : criacao.fase === 'erro_catalogo' ? (
+          <Aviso tom="info" icone="information-circle" texto={mensagemErro(criacao.tipo, criacao.mensagem)} />
+        ) : criacao.fase === 'sem_vinculo' ? (
+          <Aviso
+            tom="info"
+            icone="information-circle"
+            texto={`Agendamento online de ${criacao.especialidade.nome} ainda não está disponível pelo app. Ligue pra clínica pra marcar.`}
+          />
+        ) : criacao.fase === 'erro_criar' ? (
+          <Aviso tom="info" icone="information-circle" texto={criacao.mensagem} />
+        ) : criacao.slots.length === 0 ? (
+          <Card style={s.vazio}>
+            <Text style={s.vazioTexto}>Nenhum outro horário livre com este profissional nos próximos dias.</Text>
+          </Card>
+        ) : (
+          criacao.slots.map((slot, i) => (
+            <Pressable
+              key={`${slot.data}-${slot.horario}-${i}`}
+              onPress={() => escolherSlot(criacao.especialidade, criacao.grupo, slot, criacao.slots)}
+            >
+              <Card style={s.linhaSlot}>
+                <Text style={s.linhaTitulo}>{formatData(slot.data)}</Text>
+                <Text style={s.linhaSub}>{slot.horario.slice(0, 5)}</Text>
+              </Card>
+            </Pressable>
+          ))
+        )}
+      </Screen>
+    );
   }
 
   if (etapa.fase === 'carregando_opcoes') {
@@ -206,21 +369,24 @@ export default function Agendar() {
             <View key={unidadeId}>
               <Titulo>{unidade?.nomeFantasia ?? 'Unidade'}</Titulo>
               {grupos.map((g) => (
-                <Card key={g.profissionalId} style={s.linhaProf}>
-                  <View style={s.linhaIcon}>
-                    <Ionicons name="person" size={18} color={color.navy} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.linhaTitulo}>
-                      {g.tratamento ? `${g.tratamento} ${g.nome}` : g.nome}
-                    </Text>
-                    <Text style={s.linhaSub}>
-                      Próxima data: {formatData(g.datas[0])}
-                      {g.datas.length > 1 ? ` · +${g.datas.length - 1} data(s)` : ''}
-                    </Text>
-                    {g.faixaLabel ? <Text style={s.faixa}>{g.faixaLabel}</Text> : null}
-                  </View>
-                </Card>
+                <Pressable key={g.profissionalId} onPress={() => iniciarCriacao(especialidade, g, slots)}>
+                  <Card style={s.linhaProf}>
+                    <View style={s.linhaIcon}>
+                      <Ionicons name="person" size={18} color={color.navy} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.linhaTitulo}>
+                        {g.tratamento ? `${g.tratamento} ${g.nome}` : g.nome}
+                      </Text>
+                      <Text style={s.linhaSub}>
+                        Próxima data: {formatData(g.datas[0])}
+                        {g.datas.length > 1 ? ` · +${g.datas.length - 1} data(s)` : ''}
+                      </Text>
+                      {g.faixaLabel ? <Text style={s.faixa}>{g.faixaLabel}</Text> : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={color.ink3} />
+                  </Card>
+                </Pressable>
               ))}
             </View>
           );
@@ -267,5 +433,8 @@ const s = StyleSheet.create({
   linhaTitulo: { fontFamily: font.bold, fontSize: size.base, color: color.ink },
   linhaSub: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: 2 },
   faixa: { fontFamily: font.medium, fontSize: size.xs, color: color.navy600, marginTop: 4 },
+  voltar: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: space.md },
+  voltarTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
+  linhaSlot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.sm },
 });
 // ── FIM BLOCO ──
