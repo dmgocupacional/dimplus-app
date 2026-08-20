@@ -327,10 +327,23 @@ export default function Agendar() {
 
   // Agrupa por profissional, filtra quem NÃO atende a idade (atendeFaixa === false).
   // Idade DESCONHECIDA (null) ou dentro da faixa (true) → mostra, com rótulo se aplicável.
+  //
+  // 🔴 MEDIDO AO VIVO EM 20/08/2026: `available-schedule` IGNORA o `especialidade_id`.
+  //    Pedindo Ginecologia (271) volta o corpo clínico INTEIRO — neurocirurgião,
+  //    pediatra, radiologista. Mesma patologia do `procedures/list`, que também ignora
+  //    o filtro. Não dá para confiar no filtro do servidor: filtramos AQUI, cruzando
+  //    com `especialidadeIds` que o `opcoes` já devolve por profissional.
+  //    Sem isto a tela oferece médico que não atende a especialidade escolhida — e a
+  //    Feegow recusa a criação só na confirmação, depois do cliente escolher horário.
   const gruposPorProfissional = new Map<number, GrupoProfissional>();
   for (const slot of slots) {
     const prof = profissionaisPorId.get(slot.profissionalId);
     if (!prof) continue; // profissional não veio no catálogo — não inventa nome
+
+    // Não atende a especialidade escolhida → fora. Lista vazia também sai: sem o
+    // vínculo declarado não há como afirmar que atende, e oferecer levaria a uma
+    // criação recusada pela Feegow.
+    if (!prof.especialidadeIds.includes(especialidade.id)) continue;
 
     const idadeNaData = idadeEm(nascimento, dataUtc(slot.data));
     const veredito = atendeFaixa(idadeNaData, prof.faixa);
