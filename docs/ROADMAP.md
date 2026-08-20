@@ -19,18 +19,39 @@
 | Dependentes (titular ↔ dependente) | `docs/ROADMAP-DEPENDENTES.md` neste repo |
 | Ordem geral das frentes do ERP | `erp-dimplus/docs/PLANO-MESTRE.md` |
 
-## Resumo da fila do S2 (18/08/2026) — detalhe no ROADMAP-APP
+## Resumo da fila do S2 (19/08/2026) — detalhe no ROADMAP-APP
 
-1. **S2-L1 — helper HTTP autenticado.** NÃO é tela. O app nunca fez chamada autenticada ao
-   ERP (grep de `Bearer`/`Authorization` em `src/`: zero). Decidir de onde vem o token —
-   `session.tsx` **não guarda** o `access_token`; recomendado `getSession()` no helper.
-2. **S2-L2 — exames.** Leitura pura, sem escrita, sem `age_restriction`. Exercita o helper com
-   risco mínimo. O 404 "CPF sem cadastro na clínica" é caso REAL e precisa de UI própria.
-3. **S2-L3 — agendamento, leitura.** Itens 1–7 do §8 valem inteiros. 46/46 dependentes sem
-   nascimento: "idade desconhecida" é o caminho NORMAL, desenhar primeiro.
-4. **S2-L4 — agendamento, escrita.** Primeira escrita em sistema de terceiro; a recepção vê.
-   Confirmar o campo de id de `appoints/search` antes, ou a posse nega o dono legítimo.
-5. **S2-L5 — fechamento:** handoff + bump + o que ficou.
+1. ✅ **S2-L1 — helper HTTP autenticado.** Entregue (`b9e71c0`, v0.5.2). `chamarFeegow()`
+   em `src/lib/feegowApi.ts`, token via `getSession()` na hora da chamada.
+2. ✅ **S2-L2 — exames.** Entregue (`ed65d45`, v0.6.0). Leitura pura, 404 "CPF sem
+   cadastro" tratado como estado próprio.
+3. ✅ **S2-L3 — agendamento, leitura.** Entregue (`3e5e005`, v0.7.0). Itens 1-7 do §8
+   respeitados. Dois bugs reais achados e corrigidos só por testar contra dado real (não
+   só tsc): `age_restriction` aninhado em `opcoes.profissionais`, e envelope extra
+   `{"profissional_id": {...}}` no topo de `disponibilidade` — ver handoff da sessão.
+4. 🟡 **S2-L4 — agendamento, escrita.** PARCIAL (`364d044`, v0.8.0). Cancelar e Remarcar
+   entregues. **Criar agendamento BLOQUEADO** — ver seção nova abaixo.
+5. **S2-L5 — fechamento.** Ainda não rodado; depende de decidir se o S2 fecha "parcial"
+   (sem criar) ou espera o desbloqueio do ERP.
+
+## 🔴 Bloqueio para "criar agendamento" — depende do `erp-dimplus`, NÃO deste repo
+
+Achado em 19/08 ao planejar o S2-L4, confirmado por leitura direta do código do erp
+(`find` em `src/app/api/feegow/`, não suposição):
+
+1. **Falta rota de catálogo de procedimentos pro app.** `POST /api/feegow/agendamento`
+   exige `procedimento_id` no corpo, mas não existe nenhuma rota
+   `/api/feegow/*procedimento*` exposta — só `opcoes`, `disponibilidade`, `agendamento`
+   (GET/POST), `cancelar`, `reagendar`, `exames/*`, `conciliacao/*`.
+2. **`POST /agendamento` do erp não passa `tabela_id`** pra `criarAgendamentoFeegow`.
+   O próprio comentário do `catalogo.ts` do erp avisa: sem `tabela_id`, o agendamento
+   nasce no PARTICULAR CHEIO — cobraria de um cliente com desconto DIM+ o preço de quem
+   não tem.
+
+Nenhum dos dois é contornável do lado do app sem inventar dado de negócio (proibido).
+**Trabalho de desbloqueio é no `erp-dimplus`, em conversa própria** (regra "1 conversa =
+1 repo"). Brief para essa conversa: ver handoff `docs/sessions/2026-08-19-s2-l4-cancelar-remarcar.md`
+neste repo, seção "Próximos passos".
 
 **Fora do S2:** S-F (depende do backfill dos 256 no ERP, que ainda não rodou — a S-B entregue
 não move esse número), telemedicina (flag `false`), visão gestor (permissão, não tela).
