@@ -140,23 +140,34 @@ export default function MeusAgendamentos() {
     setRemarcacao({ fase: 'escolher', agendamento: a, slots: rDisp.dados });
   }
 
-  function confirmarRemarcacao(agendamento: MeuAgendamento, slot: SlotDisponibilidade) {
+  function confirmarRemarcacao(
+    agendamento: MeuAgendamento,
+    slot: SlotDisponibilidade,
+    slotsRestantes: SlotDisponibilidade[]
+  ) {
     Alert.alert(
       'Remarcar agendamento?',
       `Novo horário: ${formatData(slot.data)} às ${slot.horario.slice(0, 5)}. O horário atual é liberado na agenda.`,
       [
         { text: 'Voltar', style: 'cancel' },
-        { text: 'Confirmar', onPress: () => executarRemarcacao(agendamento, slot) },
+        { text: 'Confirmar', onPress: () => executarRemarcacao(agendamento, slot, slotsRestantes) },
       ]
     );
   }
 
-  async function executarRemarcacao(agendamento: MeuAgendamento, slot: SlotDisponibilidade) {
+  async function executarRemarcacao(
+    agendamento: MeuAgendamento,
+    slot: SlotDisponibilidade,
+    slotsRestantes: SlotDisponibilidade[]
+  ) {
     setRemarcacao({ fase: 'confirmando', agendamento, slot });
     const r = await reagendarAgendamento(agendamento.id, slot.data, slot.horario);
     if (!r.ok) {
       Alert.alert('Não foi possível remarcar', mensagemErro(r.tipo, r.mensagem));
-      setRemarcacao({ fase: 'escolher', agendamento, slots: [] }); // volta sem repetir a busca — evita martelar a API
+      // 🔴 Devolve a lista INTACTA. Zerar aqui fazia a tela dizer "nenhum outro horário
+      //    livre" quando o que falhou foi a REMARCAÇÃO, não a busca (mesmo defeito
+      //    corrigido em `agendar.tsx`, 20/08/2026). Segue sem refazer a busca.
+      setRemarcacao({ fase: 'escolher', agendamento, slots: slotsRestantes });
       return;
     }
     setRemarcacao(null);
@@ -184,10 +195,10 @@ export default function MeusAgendamentos() {
           remarcacao.slots
             .slice() // não muta o array vindo do estado
             .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario))
-            .map((slot, i) => (
+            .map((slot, i, listaOrdenada) => (
               <Pressable
                 key={`${slot.data}-${slot.horario}-${i}`}
-                onPress={() => confirmarRemarcacao(remarcacao.agendamento, slot)}
+                onPress={() => confirmarRemarcacao(remarcacao.agendamento, slot, listaOrdenada)}
               >
                 <Card style={s.linhaSlot}>
                   <Text style={s.linhaTitulo}>{formatData(slot.data)}</Text>

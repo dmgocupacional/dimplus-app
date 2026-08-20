@@ -185,7 +185,10 @@ export default function Agendar() {
           style: 'cancel',
           onPress: () => setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsRestantes }),
         },
-        { text: 'Confirmar', onPress: () => executarCriacao(grupo, slot, procedimentoId, especialidade) },
+        {
+          text: 'Confirmar',
+          onPress: () => executarCriacao(grupo, slot, procedimentoId, especialidade, slotsRestantes),
+        },
       ]
     );
   }
@@ -194,7 +197,8 @@ export default function Agendar() {
     grupo: GrupoProfissional,
     slot: SlotDisponibilidade,
     procedimentoId: number,
-    especialidade: Especialidade
+    especialidade: Especialidade,
+    slotsRestantes: SlotDisponibilidade[]
   ) {
     setCriacao({ fase: 'criando', grupo, slot, procedimentoId });
     const r = await criarAgendamento({
@@ -207,7 +211,11 @@ export default function Agendar() {
     });
     if (!r.ok) {
       Alert.alert('Não foi possível agendar', mensagemErro(r.tipo, r.mensagem));
-      setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: [] }); // não repete a busca — evita martelar a API
+      // 🔴 Devolve a lista INTACTA. Zerar aqui fazia a tela dizer "nenhum horário
+      //    disponível" quando o que falhou foi a CRIAÇÃO, não a busca — mensagem
+      //    mentirosa que escondia o erro real (medido em 20/08/2026).
+      //    Continua sem refazer a busca: os slots são os mesmos já carregados.
+      setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsRestantes });
       return;
     }
     setCriacao(null);
