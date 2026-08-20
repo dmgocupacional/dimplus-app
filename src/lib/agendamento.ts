@@ -266,6 +266,42 @@ export async function getMeusAgendamentos(): Promise<FeegowResultado<MeuAgendame
   return { ok: true, dados: lista.map(normalizarMeuAgendamento).filter((a): a is MeuAgendamento => a !== null) };
 }
 
+/**
+ * Separa em futuros ("Meus agendamentos") e passados ("Histórico"). O corte é por DATA,
+ * não por `statusId`: o status vem `null` com frequência (shape nunca confirmado ao vivo,
+ * ver `types.ts`) e cortar por campo que costuma faltar mandaria agendamento real para o
+ * lado errado.
+ *
+ * ⚠️ `data` também pode vir `null`. Nesse caso o item vai para FUTUROS, nunca some: é onde
+ * as ações (cancelar/remarcar) existem, e sumir com um agendamento real é pior do que
+ * mostrá-lo na aba menos provável.
+ *
+ * Comparação por string ISO (`AAAA-MM-DD`), sem `new Date` — evita o deslocamento de fuso
+ * que já mordeu `format.ts`. "Hoje" conta como futuro: a consulta de hoje à tarde ainda
+ * não passou.
+ */
+export function separarPorData(
+  lista: MeuAgendamento[],
+  hojeIso: string
+): { futuros: MeuAgendamento[]; passados: MeuAgendamento[] } {
+  const futuros: MeuAgendamento[] = [];
+  const passados: MeuAgendamento[] = [];
+  for (const a of lista) {
+    if (a.data === null || a.data >= hojeIso) futuros.push(a);
+    else passados.push(a);
+  }
+  return { futuros, passados };
+}
+
+/** `AAAA-MM-DD` de hoje em horário LOCAL — `toISOString()` usaria UTC e viraria o dia
+ *  cedo demais no fuso do Brasil (UTC-3), classificando a consulta de hoje como passada. */
+export function hojeIsoLocal(): string {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
 // ─── Cancelar / Remarcar (S2-L4) ────────────────────────────────────────────
 //
 // Primeira ESCRITA do app em sistema de terceiro. A recepção da clínica VÊ o resultado.

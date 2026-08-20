@@ -25,7 +25,9 @@ import {
   getDisponibilidade,
   getMeusAgendamentos,
   getOpcoes,
+  hojeIsoLocal,
   reagendarAgendamento,
+  separarPorData,
 } from '@/lib/agendamento';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
 import { formatData } from '@/lib/format';
@@ -98,7 +100,7 @@ export default function MeusAgendamentos() {
       setCarga({ estado: 'erro', tipo: r.tipo, mensagem: r.mensagem });
       return;
     }
-    setCarga({ estado: 'pronto', lista: r.dados });
+    setCarga({ estado: 'pronto', lista: separarPorData(r.dados, hojeIsoLocal()).futuros });
   }, []);
 
   useEffect(() => {

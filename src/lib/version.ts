@@ -3,6 +3,6 @@
 // Aqui a versão vive em DOIS lugares — manter os dois no MESMO commit:
 //   1. este arquivo (APP_VERSION / APP_VERSION_DATA) — visível no Perfil
 //   2. package.json + app.json (campo "version") — usado pelo EAS Build
-export const APP_VERSION = '0.9.2';
+export const APP_VERSION = '0.10.0';
 export const APP_VERSION_DATA = '20/08/2026';
 // ── FIM BLOCO ──
