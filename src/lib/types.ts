@@ -195,3 +195,73 @@ export type Laudo = {
   dataLaudo: string | null; // lab_report_date
 };
 // ── FIM BLOCO ──
+
+// ═══ BLOCO: AGENDAMENTO (S2-L3) ═══
+// Espelha as rotas `/api/feegow/agendamento*` do erp-dimplus. Dado CRU da Feegow — a
+// rota do erp só repassa `content`. Shapes CONFIRMADOS ao vivo em 19/08/2026 (não
+// presumidos da doc), exceto `MeuAgendamento` (ver comentário no próprio tipo).
+
+/** `opcoes.especialidades[]`. Só `exibir_agendamento_online === 1` deve aparecer pro
+ * cliente — as demais são internas (convênio, retorno etc.), fora do escopo do app. */
+export type Especialidade = {
+  id: number;
+  nome: string;
+  exibirAgendamentoOnline: boolean;
+};
+
+/** `opcoes.unidades.{matriz,unidades}[]` — as duas listas são concatenadas na leitura;
+ * a distinção matriz/filial não importa pro cliente escolher onde ir. */
+export type Unidade = {
+  id: number;
+  nomeFantasia: string;
+  cidade: string;
+  bairro: string;
+};
+
+/** `opcoes.locais[]`. `local_id` é SALA, não unidade — nunca mostrar direto ao cliente.
+ * Salas 26/27 (`local: "importado"`) são lixo de import e são filtradas na leitura,
+ * nunca chegam a este tipo. */
+export type LocalAgenda = {
+  id: number;
+  unidadeId: number;
+};
+
+/** `opcoes.profissionais[]`. `ageRestriction` já normalizado por `lerRestricaoIdade`
+ * (`idade.ts`) — ver `FaixaIdade`. */
+export type Profissional = {
+  id: number;
+  nome: string;
+  tratamento: string | null;
+  especialidadeIds: number[];
+};
+
+/** Um horário livre, já achatado e agrupado por unidade (nunca por sala) a partir do
+ * shape aninhado de `disponibilidade` (profissional → local → data → horários). Salas
+ * 26/27 já foram excluídas antes de chegar aqui. */
+export type SlotDisponibilidade = {
+  profissionalId: number;
+  localId: number;
+  unidadeId: number;
+  data: string; // AAAA-MM-DD
+  horario: string; // HH:MM:SS
+};
+
+/**
+ * Um item de "meus agendamentos" (`GET /api/feegow/agendamento` → `{ agendamentos: [...] }`).
+ *
+ * ⚠️ Shape do item **NÃO CONFIRMADO ao vivo** — a conta de teste não tem cadastro na
+ * clínica (404, mesmo caso de `exames`), então nunca vimos um agendamento real. O próprio
+ * `app-feegow-guard.ts` do erp trata o id como incerto (`agendamento_id` ou
+ * `id_agendamento` ou `id` ou `appoint_id`) — sigo a mesma defesa aqui, não invento campo
+ * novo. `status`/`data`/`horario`/`profissionalNome` são melhor esforço; `null` quando o
+ * candidato não bate, e a tela precisa tolerar isso.
+ */
+export type MeuAgendamento = {
+  id: number;
+  data: string | null;
+  horario: string | null;
+  statusId: number | null;
+  profissionalNome: string | null;
+  especialidadeNome: string | null;
+};
+// ── FIM BLOCO ──
