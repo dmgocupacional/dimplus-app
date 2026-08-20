@@ -23,17 +23,21 @@ const ATALHOS: Atalho[] = [
   { key: 'rede', rotulo: 'Rede parceira', icone: 'location', rota: '/rede' },
   { key: 'financeiro', rotulo: 'Financeiro', icone: 'receipt', rota: '/financeiro' },
   { key: 'agendamento', rotulo: 'Agendar', icone: 'calendar', rota: null },
-  { key: 'exames', rotulo: 'Exames', icone: 'document-text', rota: null },
+  // ✅ 19/08/2026 (S2-L2): tela `/exames` existe. Até aqui `rota` era `null` de propósito
+  // porque a tela não existia; o comentário antigo dizia que a flag `exames` estava
+  // `ativo=false` — isso ficou DESATUALIZADO em 18/08 (a flag foi ligada em produção,
+  // ver `erp-dimplus/docs/ROADMAP-APP.md` FASE 2). Com `rota: null` e flag ligada, o tile
+  // já estava caindo no mesmo bug de "toque morto" do `sos` logo abaixo — corrigido aqui.
+  { key: 'exames', rotulo: 'Exames', icone: 'document-text', rota: '/exames' },
   { key: 'telemedicina', rotulo: 'Telemedicina', icone: 'videocam', rota: null },
   // 🔴 TOQUE MORTO CONHECIDO (apurado 17/08/2026, correção adiada pelo Henrique).
   // `app_features.sos` está ativo=true / exige_pagamento=false, logo `pode('sos')` devolve
   // sempre true e `emBreve` é false. Com `rota: null`, `abrir()` não navega, não bloqueia e
-  // não mostra toast: o tile parece aberto e o toque não faz NADA. É o único atalho nessa
-  // condição — agendamento/exames/telemedicina estão ativo=false e pintam "em breve"
-  // corretamente; rede/financeiro/ajuda têm rota. Atinge 100% das contas.
-  // Três saídas possíveis, decisão pendente: (a) toast "em breve", (b) forçar emBreve na
-  // tela — mentira leve, a flag está ligada, (c) desligar a flag `sos` no banco, única
-  // honesta mas é escrita em produção.
+  // não mostra toast: o tile parece aberto e o toque não faz NADA. `agendamento` e
+  // `telemedicina` seguem com `rota: null` de propósito — a primeira ainda não tem tela
+  // (é o S2-L3/L4), a segunda tem `ativo=false` de fato (provedor não escolhido).
+  // Três saídas possíveis pro `sos`, decisão pendente: (a) toast "em breve", (b) forçar
+  // emBreve na tela — mentira leve, a flag está ligada, (c) desligar a flag no banco.
   { key: 'sos', rotulo: 'SOS', icone: 'medkit', rota: null },
   { key: 'ajuda', rotulo: 'Ajuda', icone: 'help-circle', rota: '/ajuda' },
 ];

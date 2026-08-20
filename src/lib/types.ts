@@ -159,3 +159,39 @@ export type DependentesSituacao = {
   valor_unitario: number;
 };
 // ── FIM BLOCO ──
+
+// ═══ BLOCO: EXAMES (S2-L2) ═══
+// Espelha as rotas `/api/feegow/exames/*` do erp-dimplus. O dado é CRU da Feegow — a
+// própria rota do erp já filtra por paciente (posse embutida no `paciente_id` da guarda).
+
+/**
+ * Pedido de exame solicitado (`GET .../exames/pedidos` → `{ pedidos: [...] }`).
+ *
+ * ⚠️ Campos confirmados no erp-dimplus (`docs/FEEGOW-API.md`): `PedidoExameID`,
+ * `PacienteID`, `ExameID`, `DataPedido` (`"AAAA-MM-DD HH:MM:SS"`), `ObservacaoPedido`
+ * (HTML embutido). **NÃO existe campo de nome do exame confirmado em nenhum lugar do
+ * repo do erp** — a doc usa reticências (`ExameID...`) sem listar o resto. `nome` aqui
+ * vem de tentativa defensiva de vários nomes de campo candidatos (ver `src/lib/exames.ts`)
+ * e é `null` quando nenhum bate — a tela cai para "Exame #{exameId}" nesse caso.
+ */
+export type PedidoExame = {
+  id: number;
+  exameId: number | null;
+  nome: string | null;
+  /** `DataPedido` cru, `"AAAA-MM-DD HH:MM:SS"` — sem parse de Date (evita bug de fuso). */
+  dataPedido: string | null;
+  /** `ObservacaoPedido` já sem tags HTML. */
+  observacao: string | null;
+};
+
+/**
+ * Laudo pronto (`GET .../exames/laudos` → `{ laudos: [...] }`).
+ * Shape CONFIRMADO ao vivo (`docs/FEEGOW-API.md`): `{lab_report_id, request_date,
+ * lab_report_date, patient_name}`, datas em `Y-m-d`.
+ */
+export type Laudo = {
+  labReportId: number;
+  dataPedido: string | null; // request_date
+  dataLaudo: string | null; // lab_report_date
+};
+// ── FIM BLOCO ──
