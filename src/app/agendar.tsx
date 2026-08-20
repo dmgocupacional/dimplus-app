@@ -85,7 +85,7 @@ export default function Agendar() {
   async function escolherEspecialidade(opcoes: Opcoes, especialidade: Especialidade) {
     setEtapa({ fase: 'carregando_horarios', opcoes, especialidade });
     const locaisPorId = new Map(opcoes.locais.map((l) => [l.id, l]));
-    const r = await getDisponibilidade(especialidade.id, locaisPorId);
+    const r = await getDisponibilidade({ especialidadeId: especialidade.id }, locaisPorId);
     if (!r.ok) {
       setEtapa({ fase: 'erro_horarios', opcoes, especialidade, tipo: r.tipo, mensagem: r.mensagem });
       return;

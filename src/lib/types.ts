@@ -258,6 +258,7 @@ export type SlotDisponibilidade = {
  */
 export type MeuAgendamento = {
   id: number;
+  profissionalId: number | null;
   data: string | null;
   horario: string | null;
   statusId: number | null;

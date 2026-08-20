@@ -195,15 +195,17 @@ function achatarDisponibilidade(cru: unknown, locaisPorId: Map<number, LocalAgen
 }
 
 export async function getDisponibilidade(
-  especialidadeId: number,
+  filtros: { especialidadeId?: number; profissionalId?: number },
   locaisPorId: Map<number, LocalAgenda>
 ): Promise<FeegowResultado<SlotDisponibilidade[]>> {
-  const qs = new URLSearchParams({
+  const params: Record<string, string> = {
     tipo: 'A',
     data_inicio: isoOffsetDias(0),
     data_fim: isoOffsetDias(JANELA_DISPONIBILIDADE_DIAS),
-    especialidade_id: String(especialidadeId),
-  });
+  };
+  if (filtros.especialidadeId !== undefined) params.especialidade_id = String(filtros.especialidadeId);
+  if (filtros.profissionalId !== undefined) params.profissional_id = String(filtros.profissionalId);
+  const qs = new URLSearchParams(params);
   const r = await chamarFeegow<{ disponibilidade: unknown }>(
     `/api/feegow/agendamento/disponibilidade?${qs.toString()}`
   );
@@ -240,6 +242,7 @@ function normalizarMeuAgendamento(item: unknown): MeuAgendamento | null {
   if (id === null) return null;
   return {
     id,
+    profissionalId: paraNumero(o.profissional_id ?? o.ProfissionalID ?? o.id_profissional),
     data: extrairTexto(o, ['data', 'Data', 'data_agendamento']),
     horario: extrairTexto(o, ['horario', 'Horario', 'hora']),
     statusId: paraNumero(o.status_id ?? o.StatusID),
@@ -253,5 +256,44 @@ export async function getMeusAgendamentos(): Promise<FeegowResultado<MeuAgendame
   if (!r.ok) return r;
   const lista = Array.isArray(r.dados.agendamentos) ? r.dados.agendamentos : [];
   return { ok: true, dados: lista.map(normalizarMeuAgendamento).filter((a): a is MeuAgendamento => a !== null) };
+}
+
+// ─── Cancelar / Remarcar (S2-L4) ────────────────────────────────────────────
+//
+// Primeira ESCRITA do app em sistema de terceiro. A recepção da clínica VÊ o resultado.
+// A posse (o agendamento pertence a quem está logado) é verificada no SERVIDOR
+// (`pacientePossuiAgendamento`, fail-closed) — aqui só repassamos o `agendamento_id`;
+// não há checagem de posse redundante no app porque ela não teria como ser confiável
+// (o app não vê a lista "crua" da Feegow, só o que o erp já filtrou).
+//
+// 🔴 Criar agendamento NÃO está neste lote — bloqueado por dois problemas do lado do
+// erp-dimplus (fora deste repo): (1) não existe rota de catálogo de procedimentos pro
+// app, e `procedimento_id` é obrigatório pra criar; (2) a rota `POST /agendamento` do
+// erp não passa `tabela_id` pra `criarAgendamentoFeegow`, o que faria o agendamento
+// nascer no PARTICULAR CHEIO em vez do preço DIM+. Ver handoff da sessão.
+
+export async function cancelarAgendamento(
+  agendamentoId: number,
+  obs?: string
+): Promise<FeegowResultado<{ ok: true }>> {
+  const r = await chamarFeegow<{ ok: boolean }>('/api/feegow/agendamento/cancelar', {
+    method: 'POST',
+    body: { agendamento_id: agendamentoId, ...(obs ? { obs } : {}) },
+  });
+  if (!r.ok) return r;
+  return { ok: true, dados: { ok: true } };
+}
+
+export async function reagendarAgendamento(
+  agendamentoId: number,
+  data: string,
+  horario: string
+): Promise<FeegowResultado<{ ok: true }>> {
+  const r = await chamarFeegow<{ ok: boolean }>('/api/feegow/agendamento/reagendar', {
+    method: 'POST',
+    body: { agendamento_id: agendamentoId, data, horario },
+  });
+  if (!r.ok) return r;
+  return { ok: true, dados: { ok: true } };
 }
 // ── FIM BLOCO ──
