@@ -432,17 +432,26 @@ export default function Agendar() {
             </Text>
           </Card>
         ) : (
-          visiveis.map((e) => (
-            <Pressable key={e.id} onPress={() => escolherEspecialidade(opcoes, catalogo, e)}>
-              <Card style={s.linhaEsp}>
-                <View style={s.espIcone}>
-                  <Ionicons name={iconeEspecialidade(e.nome)} size={18} color={color.navy} />
+          // Grade de dois por linha: com poucas especialidades a lista deixava a tela
+          // vazia, e o bloco maior dá um alvo de toque melhor no celular.
+          <View style={s.gradeEsp}>
+            {visiveis.map((e) => (
+              <Pressable
+                key={e.id}
+                style={s.blocoEsp}
+                onPress={() => escolherEspecialidade(opcoes, catalogo, e)}
+              >
+                <View style={s.blocoEspIcone}>
+                  <Ionicons name={iconeEspecialidade(e.nome)} size={24} color={color.navy} />
                 </View>
-                <Text style={s.linhaEspTxt}>{e.nome}</Text>
-                <Ionicons name="chevron-forward" size={18} color={color.ink3} />
-              </Card>
-            </Pressable>
-          ))
+                {/* 2 linhas: "Ginecologia e Obstetrícia" não cabe em uma, e cortar o
+                    nome da especialidade é pior do que o bloco crescer um pouco. */}
+                <Text style={s.blocoEspTxt} numberOfLines={2}>
+                  {e.nome}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         )}
 
         {/* As não-agendáveis ficam FORA da lista, mas a clínica atende muito mais que
@@ -586,15 +595,6 @@ const s = StyleSheet.create({
     marginBottom: space.md,
   },
   buscaInput: { flex: 1, fontFamily: font.regular, fontSize: size.base, color: color.ink, padding: 0 },
-  espIcone: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm,
-    backgroundColor: color.greenBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: space.md,
-  },
   rodapeTelefone: {
     fontFamily: font.regular,
     fontSize: size.sm,
@@ -603,13 +603,35 @@ const s = StyleSheet.create({
     marginTop: space.lg,
     marginBottom: space.sm,
   },
-  linhaEsp: {
-    flexDirection: 'row',
+  gradeEsp: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  blocoEsp: {
+    // 48% (e não 50%) para o `gap` caber sem estourar a linha e virar 1 coluna.
+    width: '48%',
+    minHeight: 116,
+    backgroundColor: color.white,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    paddingVertical: space.lg,
+    paddingHorizontal: space.md,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: space.sm,
+    justifyContent: 'center',
+    gap: space.sm,
   },
-  linhaEspTxt: { flex: 1, fontFamily: font.bold, fontSize: size.base, color: color.ink },
+  blocoEspIcone: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.pill,
+    backgroundColor: color.greenBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blocoEspTxt: {
+    fontFamily: font.bold,
+    fontSize: size.sm,
+    color: color.ink,
+    textAlign: 'center',
+  },
   linhaProf: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, marginBottom: space.sm },
   linhaIcon: {
     width: 38,
