@@ -1,6 +1,7 @@
 // ═══ BLOCO: TELA — HISTÓRICO DE AGENDAMENTOS ═══
 //
-// Consultas que já passaram. SOMENTE LEITURA, de propósito: cancelar ou remarcar algo
+// Consultas encerradas: as que já passaram e as que foram desmarcadas (estas mesmo com
+// data futura — ver `separarPorData`). SOMENTE LEITURA, de propósito: cancelar ou remarcar algo
 // que já aconteceu não faz sentido de produto, e a Feegow aceitaria a chamada — o que
 // mexeria na agenda real da clínica por engano. Por isso nenhum botão de ação aqui.
 //
@@ -87,7 +88,8 @@ export default function HistoricoAgendamentos() {
       };
     });
     // Mais recentes primeiro: no histórico o que interessa é a última consulta, não a
-    // primeira. `data` null vai para futuros em `separarPorData`, então não chega aqui.
+    // primeira. `data` pode chegar null aqui agora (desmarcado sem data) — o `?? ''`
+    // no comparador joga esses para o fim em vez de quebrar a ordenação.
     const passados = separarPorData(comNomes, hojeIsoLocal()).passados.sort((a, b) =>
       (b.data ?? '').localeCompare(a.data ?? '')
     );
@@ -121,7 +123,7 @@ export default function HistoricoAgendamentos() {
       {lista.length === 0 ? (
         <Card style={s.vazio}>
           <Ionicons name="time-outline" size={30} color={color.ink3} />
-          <Text style={s.vazioTexto}>Nenhuma consulta anterior por aqui.</Text>
+          <Text style={s.vazioTexto}>Nada por aqui ainda. Consultas realizadas e desmarcadas aparecem nesta tela.</Text>
         </Card>
       ) : (
         lista.map((a) => {

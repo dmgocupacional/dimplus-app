@@ -280,6 +280,13 @@ export async function getMeusAgendamentos(): Promise<FeegowResultado<MeuAgendame
  * que já mordeu `format.ts`. "Hoje" conta como futuro: a consulta de hoje à tarde ainda
  * não passou.
  */
+/** Status que ENCERRAM o agendamento — some da lista de ativos, mesmo em data futura.
+ *  11 desmarcado pelo paciente · 15 remarcado (o novo agendamento é outro registro) ·
+ *  16 desmarcado pelo profissional. Os mesmos que liberam o horário na agenda, no
+ *  `disponibilidade/route.ts` do erp — se um mudar, os dois mudam juntos.
+ *  Status AUSENTE não encerra nada: cai na regra de data. */
+const STATUS_ENCERRA_AGENDAMENTO = new Set([11, 15, 16]);
+
 export function separarPorData(
   lista: MeuAgendamento[],
   hojeIso: string
@@ -287,6 +294,13 @@ export function separarPorData(
   const futuros: MeuAgendamento[] = [];
   const passados: MeuAgendamento[] = [];
   for (const a of lista) {
+    // Desmarcado vai para o histórico mesmo com data futura: não é compromisso ativo, e
+    // deixá-lo entre os futuros dava a ele botões de remarcar/cancelar que não fazem
+    // sentido — e a lista acumularia cancelados para sempre (visto em 21/08/2026).
+    if (a.statusId !== null && STATUS_ENCERRA_AGENDAMENTO.has(a.statusId)) {
+      passados.push(a);
+      continue;
+    }
     if (a.data === null || a.data >= hojeIso) futuros.push(a);
     else passados.push(a);
   }

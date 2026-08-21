@@ -8,7 +8,7 @@
 // As três entradas são caminhos DIFERENTES sobre o mesmo módulo:
 //   · Novo agendamento     → `/novo-agendamento` (especialidade → profissional → criar)
 //   · Meus agendamentos    → `/meus-agendamentos` (futuros, com cancelar/remarcar)
-//   · Histórico            → `/historico-agendamentos` (passados, somente leitura)
+//   · Histórico            → `/historico-agendamentos` (encerrados, somente leitura)
 //
 // O corte entre "meus" e "histórico" é por DATA, não por status: `statusId` vem `null`
 // com frequência (shape nunca confirmado ao vivo — ver `types.ts`), e cortar por um
@@ -44,7 +44,7 @@ export default function Agendar() {
         <LinhaLista
           icone="time"
           titulo="Histórico de agendamentos"
-          subtitulo="Consultas que já passaram."
+          subtitulo="Consultas realizadas e desmarcadas."
           onPress={() => router.push('/historico-agendamentos' as never)}
         />
       </Card>
