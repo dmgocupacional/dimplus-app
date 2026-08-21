@@ -85,7 +85,12 @@ o agendamento apenas na confirmação. Ler as duas, sempre.
 - Há salas de exame/procedimento (Raio X, Tomografia, Ultrassom, Endoscopia, Enfermagem)
   misturadas com consultório. `tipo=A` vs `E` vs `P` importa.
 
-## 6. 🔴 DUAS dependências de DADO bloqueiam o S2
+## 6. 🗄️ HISTÓRICO — as duas dependências de DADO que bloquearam o S2
+
+> ✅ **RESOLVIDAS. O S2 fechou em 21/08/2026.** Mantido como registro de como o bloqueio
+> foi diagnosticado e resolvido — não reabrir. A 6.1 (CPF sem cadastro na Feegow) foi
+> resolvida criando o paciente de teste `499191`, e isso destravou o diagnóstico de
+> vários outros erros que aquele 404 estava mascarando.
 
 ### 6.1 `feegow_paciente_id` ausente nas contas de teste
 
