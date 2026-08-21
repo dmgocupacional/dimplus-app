@@ -85,6 +85,9 @@ export default function HistoricoAgendamentos() {
           (prof ? (prof.tratamento ? `${prof.tratamento} ${prof.nome}` : prof.nome) : null),
         especialidadeNome:
           a.especialidadeNome ??
+          // Fonte certa: especialidade DESTE agendamento, não a primeira do profissional
+          // (bug documentado — Cardiologia exibida numa consulta de Geriatria).
+          (a.especialidadeId !== null ? (esps?.get(a.especialidadeId) ?? null) : null) ??
           (prof?.especialidadeIds.length ? (esps?.get(prof.especialidadeIds[0]) ?? null) : null),
       };
     });

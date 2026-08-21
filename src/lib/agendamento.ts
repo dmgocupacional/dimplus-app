@@ -273,6 +273,9 @@ function normalizarMeuAgendamento(item: unknown): MeuAgendamento | null {
     statusId: paraNumero(o.status_id ?? o.StatusID),
     profissionalNome: extrairTexto(o, ['profissional_nome', 'nome_profissional', 'ProfissionalNome']),
     especialidadeNome: extrairTexto(o, ['especialidade_nome', 'nome_especialidade', 'EspecialidadeNome']),
+    // `especialidade_id` vem em todo agendamento de `appoints/search` (confirmado ao
+    // vivo), mesmo sem nome junto — é a fonte certa pra cruzar com o catálogo.
+    especialidadeId: paraNumero(o.especialidade_id ?? o.EspecialidadeID),
   };
 }
 

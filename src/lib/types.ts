@@ -264,6 +264,11 @@ export type MeuAgendamento = {
   statusId: number | null;
   profissionalNome: string | null;
   especialidadeNome: string | null;
+  /** Vem em TODO agendamento (`appoints/search`), mas sem nome junto — cruzar com o
+   *  catálogo de especialidades. Correto mesmo quando o profissional atende mais de
+   *  uma especialidade; NUNCA usar a primeira especialidade do profissional como
+   *  substituto — foi o bug (Cardiologia exibida numa consulta de Geriatria). */
+  especialidadeId: number | null;
 };
 
 /**
