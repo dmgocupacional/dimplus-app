@@ -55,10 +55,15 @@ function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
     case 'nao_autenticado':
     case 'sem_sessao':
       return 'Sua sessão expirou. Saia e entre novamente para continuar.';
+    case 'conflito':
+      return 'Esse horário acabou de ser ocupado. Volte e escolha outro.';
     case 'rede':
       return 'Sem conexão. Verifique a internet e tente de novo.';
     default:
-      return mensagemServidor || 'Não foi possível completar agora.';
+      // Nunca exibir payload cru do servidor — ver nota em `novo-agendamento.tsx`.
+      return mensagemServidor && mensagemServidor.length < 120 && !/[{}"\\]/.test(mensagemServidor)
+        ? mensagemServidor
+        : 'Não foi possível completar agora. Tente de novo em instantes.';
   }
 }
 

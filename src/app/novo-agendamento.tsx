@@ -83,10 +83,18 @@ function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
     case 'nao_autenticado':
     case 'sem_sessao':
       return 'Sua sessão expirou. Saia e entre novamente para continuar.';
+    case 'conflito':
+      // Corrida por horário concorrido — acontece de verdade e não é falha do cliente.
+      return 'Esse horário acabou de ser ocupado. Escolha outro na lista, que já atualizamos.';
     case 'rede':
       return 'Sem conexão. Verifique a internet e tente de novo.';
     default:
-      return mensagemServidor || 'Não foi possível carregar agora.';
+      // 🔴 NUNCA cair no texto cru do servidor: em campo (21/08/2026) isso exibiu o JSON
+      //    da Feegow escapado na tela do cliente. Mensagem do servidor só quando for
+      //    curta e legível — qualquer coisa com chave/aspas/backslash é payload, não frase.
+      return mensagemServidor && mensagemServidor.length < 120 && !/[{}"\\]/.test(mensagemServidor)
+        ? mensagemServidor
+        : 'Não foi possível concluir agora. Tente de novo em instantes.';
   }
 }
 
@@ -211,10 +219,26 @@ export default function Agendar() {
     });
     if (!r.ok) {
       Alert.alert('Não foi possível agendar', mensagemErro(r.tipo, r.mensagem));
-      // 🔴 Devolve a lista INTACTA. Zerar aqui fazia a tela dizer "nenhum horário
-      //    disponível" quando o que falhou foi a CRIAÇÃO, não a busca — mensagem
-      //    mentirosa que escondia o erro real (medido em 20/08/2026).
-      //    Continua sem refazer a busca: os slots são os mesmos já carregados.
+      // 🔴 Slot ocupado por outra pessoa: a lista em mãos está PROVADAMENTE velha, então
+      //    aqui vale pagar a rede de novo — mostrar de volta a mesma lista faria o
+      //    cliente reescolher um horário que já não existe. Nos demais erros a lista
+      //    continua válida e não refazemos a busca.
+      if (r.tipo === 'conflito' && etapa.fase === 'horarios') {
+        const locaisPorId = new Map(etapa.opcoes.locais.map((l) => [l.id, l]));
+        setCriacao({ fase: 'carregando_catalogo', especialidade, grupo, slot });
+        const novo = await getDisponibilidade({ especialidadeId: especialidade.id }, locaisPorId);
+        setCriacao({
+          fase: 'escolher_slot',
+          especialidade,
+          grupo,
+          slots: novo.ok
+            ? novo.dados
+                .filter((sl) => sl.profissionalId === grupo.profissionalId)
+                .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario))
+            : [],
+        });
+        return;
+      }
       setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsRestantes });
       return;
     }
