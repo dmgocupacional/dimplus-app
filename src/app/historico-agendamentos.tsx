@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Aviso, Card, Pill, Screen } from '@/components/ui';
-import { getMeusAgendamentos, hojeIsoLocal, separarPorData } from '@/lib/agendamento';
+import { getMeusAgendamentos, getOpcoes, hojeIsoLocal, separarPorData } from '@/lib/agendamento';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
 import { formatData } from '@/lib/format';
 import type { MeuAgendamento } from '@/lib/types';
@@ -65,14 +65,30 @@ export default function HistoricoAgendamentos() {
 
   const carregar = useCallback(async () => {
     setCarga({ estado: 'carregando' });
-    const r = await getMeusAgendamentos();
+    // Mesmo caso de `meus-agendamentos`: a Feegow manda `profissional_id`, não o nome —
+    // resolvemos pelo catálogo de opções, senão a tela toda diz "não informado".
+    const [r, rOpcoes] = await Promise.all([getMeusAgendamentos(), getOpcoes()]);
     if (!r.ok) {
       setCarga({ estado: 'erro', tipo: r.tipo, mensagem: r.mensagem });
       return;
     }
+    const profs = rOpcoes.ok ? new Map(rOpcoes.dados.profissionais.map((p) => [p.id, p])) : null;
+    const esps = rOpcoes.ok ? new Map(rOpcoes.dados.especialidades.map((e) => [e.id, e.nome])) : null;
+    const comNomes = r.dados.map((a) => {
+      const prof = a.profissionalId !== null ? profs?.get(a.profissionalId) : undefined;
+      return {
+        ...a,
+        profissionalNome:
+          a.profissionalNome ??
+          (prof ? (prof.tratamento ? `${prof.tratamento} ${prof.nome}` : prof.nome) : null),
+        especialidadeNome:
+          a.especialidadeNome ??
+          (prof?.especialidadeIds.length ? (esps?.get(prof.especialidadeIds[0]) ?? null) : null),
+      };
+    });
     // Mais recentes primeiro: no histórico o que interessa é a última consulta, não a
     // primeira. `data` null vai para futuros em `separarPorData`, então não chega aqui.
-    const passados = separarPorData(r.dados, hojeIsoLocal()).passados.sort((a, b) =>
+    const passados = separarPorData(comNomes, hojeIsoLocal()).passados.sort((a, b) =>
       (b.data ?? '').localeCompare(a.data ?? '')
     );
     setCarga({ estado: 'pronto', lista: passados });

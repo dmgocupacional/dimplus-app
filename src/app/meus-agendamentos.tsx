@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CalendarioMes } from '@/components/CalendarioMes';
 import { Aviso, Card, Pill, Screen } from '@/components/ui';
 import {
   cancelarAgendamento,
@@ -28,6 +29,7 @@ import {
   hojeIsoLocal,
   reagendarAgendamento,
   separarPorData,
+  type Opcoes,
 } from '@/lib/agendamento';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
 import { formatData } from '@/lib/format';
@@ -37,13 +39,14 @@ import { color, font, radius, size, space } from '@/theme/tokens';
 type Carga =
   | { estado: 'carregando' }
   | { estado: 'erro'; tipo: FeegowErroTipo; mensagem: string }
-  | { estado: 'pronto'; lista: MeuAgendamento[] };
+  | { estado: 'pronto'; lista: MeuAgendamento[]; opcoes: Opcoes | null };
 
 /** Sub-fluxo de remarcação — vive dentro da mesma tela, não é navegação. */
 type Remarcacao =
   | { fase: 'carregando'; agendamento: MeuAgendamento }
   | { fase: 'erro'; agendamento: MeuAgendamento; tipo: FeegowErroTipo; mensagem: string }
-  | { fase: 'escolher'; agendamento: MeuAgendamento; slots: SlotDisponibilidade[] }
+  | { fase: 'escolher_dia'; agendamento: MeuAgendamento; slots: SlotDisponibilidade[] }
+  | { fase: 'escolher_hora'; agendamento: MeuAgendamento; slots: SlotDisponibilidade[]; dia: string }
   | { fase: 'confirmando'; agendamento: MeuAgendamento; slot: SlotDisponibilidade };
 
 function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
@@ -100,12 +103,34 @@ export default function MeusAgendamentos() {
 
   const carregar = useCallback(async () => {
     setCarga({ estado: 'carregando' });
-    const r = await getMeusAgendamentos();
+    // 🔴 `appoints/search` devolve `profissional_id` mas NÃO o nome do profissional nem
+    //    o da especialidade — por isso a lista mostrava "Profissional a confirmar" mesmo
+    //    em agendamento com médico definido (reportado em campo, 21/08/2026). O catálogo
+    //    de `opcoes` tem os nomes; cruzamos por id aqui.
+    const [r, rOpcoes] = await Promise.all([getMeusAgendamentos(), getOpcoes()]);
     if (!r.ok) {
       setCarga({ estado: 'erro', tipo: r.tipo, mensagem: r.mensagem });
       return;
     }
-    setCarga({ estado: 'pronto', lista: separarPorData(r.dados, hojeIsoLocal()).futuros });
+    // Opções são COMPLEMENTO: se falharem, a lista ainda aparece — só sem os nomes.
+    const profs = rOpcoes.ok ? new Map(rOpcoes.dados.profissionais.map((p) => [p.id, p])) : null;
+    const esps = rOpcoes.ok ? new Map(rOpcoes.dados.especialidades.map((e) => [e.id, e.nome])) : null;
+
+    const comNomes = r.dados.map((a) => {
+      const prof = a.profissionalId !== null ? profs?.get(a.profissionalId) : undefined;
+      return {
+        ...a,
+        // Só preenche o que veio vazio — se a Feegow um dia mandar o nome, ele vence.
+        profissionalNome:
+          a.profissionalNome ??
+          (prof ? (prof.tratamento ? `${prof.tratamento} ${prof.nome}` : prof.nome) : null),
+        especialidadeNome:
+          a.especialidadeNome ??
+          (prof?.especialidadeIds.length ? (esps?.get(prof.especialidadeIds[0]) ?? null) : null),
+      };
+    });
+
+    setCarga({ estado: 'pronto', lista: separarPorData(comNomes, hojeIsoLocal()).futuros, opcoes: rOpcoes.ok ? rOpcoes.dados : null });
   }, []);
 
   useEffect(() => {
@@ -133,18 +158,23 @@ export default function MeusAgendamentos() {
   async function iniciarRemarcacao(a: MeuAgendamento) {
     if (a.profissionalId === null) return; // botão nem deveria aparecer nesse caso
     setRemarcacao({ fase: 'carregando', agendamento: a });
-    const rOpcoes = await getOpcoes();
-    if (!rOpcoes.ok) {
-      setRemarcacao({ fase: 'erro', agendamento: a, tipo: rOpcoes.tipo, mensagem: rOpcoes.mensagem });
-      return;
+    // Reaproveita as opções já carregadas com a lista; só busca de novo se faltarem.
+    let opcoes = carga.estado === 'pronto' ? carga.opcoes : null;
+    if (!opcoes) {
+      const rOpcoes = await getOpcoes();
+      if (!rOpcoes.ok) {
+        setRemarcacao({ fase: 'erro', agendamento: a, tipo: rOpcoes.tipo, mensagem: rOpcoes.mensagem });
+        return;
+      }
+      opcoes = rOpcoes.dados;
     }
-    const locaisPorId = new Map(rOpcoes.dados.locais.map((l) => [l.id, l]));
+    const locaisPorId = new Map(opcoes.locais.map((l) => [l.id, l]));
     const rDisp = await getDisponibilidade({ profissionalId: a.profissionalId }, locaisPorId);
     if (!rDisp.ok) {
       setRemarcacao({ fase: 'erro', agendamento: a, tipo: rDisp.tipo, mensagem: rDisp.mensagem });
       return;
     }
-    setRemarcacao({ fase: 'escolher', agendamento: a, slots: rDisp.dados });
+    setRemarcacao({ fase: 'escolher_dia', agendamento: a, slots: rDisp.dados });
   }
 
   function confirmarRemarcacao(
@@ -174,7 +204,7 @@ export default function MeusAgendamentos() {
       // 🔴 Devolve a lista INTACTA. Zerar aqui fazia a tela dizer "nenhum outro horário
       //    livre" quando o que falhou foi a REMARCAÇÃO, não a busca (mesmo defeito
       //    corrigido em `agendar.tsx`, 20/08/2026). Segue sem refazer a busca.
-      setRemarcacao({ fase: 'escolher', agendamento, slots: slotsRestantes });
+      setRemarcacao({ fase: 'escolher_dia', agendamento, slots: slotsRestantes });
       return;
     }
     setRemarcacao(null);
@@ -183,9 +213,31 @@ export default function MeusAgendamentos() {
 
   // ── Sub-tela de remarcação, sobrepõe a lista enquanto ativa ──
   if (remarcacao) {
+    // Mesmo fluxo de duas etapas do "novo agendamento": calendário e depois horário.
+    // Antes era uma lista corrida que repetia a mesma data em dezenas de linhas.
+    const voltar = () => {
+      if (remarcacao.fase === 'escolher_hora') {
+        setRemarcacao({
+          fase: 'escolher_dia',
+          agendamento: remarcacao.agendamento,
+          slots: remarcacao.slots,
+        });
+        return;
+      }
+      setRemarcacao(null);
+    };
+
+    const horasDoDia =
+      remarcacao.fase === 'escolher_hora'
+        ? remarcacao.slots
+            .filter((sl) => sl.data === remarcacao.dia)
+            .slice()
+            .sort((a, b) => a.horario.localeCompare(b.horario))
+        : [];
+
     return (
-      <Screen titulo="Novo horário" scroll={remarcacao.fase === 'escolher'}>
-        <Pressable onPress={() => setRemarcacao(null)} style={s.voltar}>
+      <Screen titulo={remarcacao.fase === 'escolher_hora' ? 'Novo horário' : 'Nova data'}>
+        <Pressable onPress={voltar} style={s.voltar}>
           <Ionicons name="chevron-back" size={18} color={color.navy} />
           <Text style={s.voltarTxt}>Voltar</Text>
         </Pressable>
@@ -198,22 +250,40 @@ export default function MeusAgendamentos() {
           <Card style={s.vazio}>
             <Text style={s.vazioTexto}>Nenhum outro horário livre com este profissional nos próximos dias.</Text>
           </Card>
-        ) : (
-          remarcacao.slots
-            .slice() // não muta o array vindo do estado
-            .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario))
-            .map((slot, i, listaOrdenada) => (
-              <Pressable
-                key={`${slot.data}-${slot.horario}-${i}`}
-                onPress={() => confirmarRemarcacao(remarcacao.agendamento, slot, listaOrdenada)}
-              >
-                <Card style={s.linhaSlot}>
-                  <Text style={s.linhaTitulo}>{formatData(slot.data)}</Text>
-                  <Text style={s.linhaSub}>{slot.horario.slice(0, 5)}</Text>
-                </Card>
-              </Pressable>
-            ))
-        )}
+        ) : remarcacao.fase === 'escolher_dia' ? (
+          <Card>
+            <Text style={s.linhaTitulo}>
+              {remarcacao.agendamento.profissionalNome ?? 'Mesmo profissional'}
+            </Text>
+            <Text style={s.remarcaSub}>Escolha a nova data.</Text>
+            <CalendarioMes
+              diasComVaga={[...new Set(remarcacao.slots.map((sl) => sl.data))]}
+              onEscolherDia={(dia) =>
+                setRemarcacao({
+                  fase: 'escolher_hora',
+                  agendamento: remarcacao.agendamento,
+                  slots: remarcacao.slots,
+                  dia,
+                })
+              }
+            />
+          </Card>
+        ) : remarcacao.fase === 'escolher_hora' ? (
+          <>
+            <Text style={s.diaEscolhido}>{formatData(remarcacao.dia)}</Text>
+            <View style={s.gradeHoras}>
+              {horasDoDia.map((slot, i) => (
+                <Pressable
+                  key={`${slot.horario}-${i}`}
+                  style={s.chipHora}
+                  onPress={() => confirmarRemarcacao(remarcacao.agendamento, slot, remarcacao.slots)}
+                >
+                  <Text style={s.chipHoraTexto}>{slot.horario.slice(0, 5)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
       </Screen>
     );
   }
@@ -328,6 +398,17 @@ const s = StyleSheet.create({
   botaoPerigoTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.danger },
   voltar: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: space.md },
   voltarTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
-  linhaSlot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.sm },
+  remarcaSub: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: 2, marginBottom: space.lg },
+  diaEscolhido: { fontFamily: font.bold, fontSize: size.base, color: color.ink, marginBottom: space.md, textTransform: 'capitalize' },
+  gradeHoras: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chipHora: {
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
+    backgroundColor: color.greenBg,
+    borderWidth: 1,
+    borderColor: color.greenDeep,
+  },
+  chipHoraTexto: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
 });
 // ── FIM BLOCO ──
