@@ -21,6 +21,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CalendarioMes } from '@/components/CalendarioMes';
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
 import {
   criarAgendamento,
@@ -49,7 +50,20 @@ type Etapa =
  * sobre a mesma tela, não é navegação. Os slots do profissional escolhido já vêm da
  * mesma busca de disponibilidade da tela (não refaz a chamada). */
 type Criacao =
-  | { fase: 'escolher_slot'; especialidade: Especialidade; grupo: GrupoProfissional; slots: SlotDisponibilidade[] }
+  | { fase: 'carregando_agenda'; especialidade: Especialidade; grupo: GrupoProfissional }
+  | {
+      fase: 'escolher_dia';
+      especialidade: Especialidade;
+      grupo: GrupoProfissional;
+      slots: SlotDisponibilidade[];
+    }
+  | {
+      fase: 'escolher_hora';
+      especialidade: Especialidade;
+      grupo: GrupoProfissional;
+      slots: SlotDisponibilidade[];
+      dia: string; // AAAA-MM-DD
+    }
   | {
       fase: 'carregando_catalogo';
       especialidade: Especialidade;
@@ -59,20 +73,11 @@ type Criacao =
   | { fase: 'erro_catalogo'; especialidade: Especialidade; tipo: FeegowErroTipo; mensagem: string }
   | { fase: 'sem_vinculo'; especialidade: Especialidade }
   | {
-      fase: 'confirmando';
-      especialidade: Especialidade;
-      grupo: GrupoProfissional;
-      slot: SlotDisponibilidade;
-      procedimentoId: number;
-      slotsRestantes: SlotDisponibilidade[]; // pra "Voltar" não perder a lista
-    }
-  | {
       fase: 'criando';
       grupo: GrupoProfissional;
       slot: SlotDisponibilidade;
       procedimentoId: number;
-    }
-  | { fase: 'erro_criar'; mensagem: string };
+    };
 
 function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
   switch (tipo) {
@@ -146,19 +151,34 @@ export default function Agendar() {
 
   // ── Sub-fluxo de criação (S2-L4b) ────────────────────────────────────────
 
-  function iniciarCriacao(especialidade: Especialidade, grupo: GrupoProfissional, todosSlots: SlotDisponibilidade[]) {
-    const slotsDoProfissional = todosSlots
+  /** Busca a agenda DO PROFISSIONAL escolhido, sempre fresca.
+   *  Não reaproveita a lista da especialidade por dois motivos: (1) ela já está velha
+   *  quando o cliente chega aqui, e (2) só com `profissional_id` o servidor consegue
+   *  podar os horários que a Feegow oferece mas recusa na criação (erp v0.260.0). */
+  async function carregarAgendaDoProfissional(
+    especialidade: Especialidade,
+    grupo: GrupoProfissional
+  ): Promise<SlotDisponibilidade[] | null> {
+    if (etapa.fase !== 'horarios') return null;
+    const locaisPorId = new Map(etapa.opcoes.locais.map((l) => [l.id, l]));
+    const r = await getDisponibilidade({ profissionalId: grupo.profissionalId }, locaisPorId);
+    if (!r.ok) return null;
+    return r.dados
       .filter((sl) => sl.profissionalId === grupo.profissionalId)
-      .slice()
       .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
-    setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsDoProfissional });
+  }
+
+  async function iniciarCriacao(especialidade: Especialidade, grupo: GrupoProfissional) {
+    setCriacao({ fase: 'carregando_agenda', especialidade, grupo });
+    const slots = await carregarAgendaDoProfissional(especialidade, grupo);
+    setCriacao({ fase: 'escolher_dia', especialidade, grupo, slots: slots ?? [] });
   }
 
   async function escolherSlot(
     especialidade: Especialidade,
     grupo: GrupoProfissional,
     slot: SlotDisponibilidade,
-    slotsRestantes: SlotDisponibilidade[]
+    slots: SlotDisponibilidade[]
   ) {
     setCriacao({ fase: 'carregando_catalogo', especialidade, grupo, slot });
     const r = await getProcedimentos();
@@ -172,30 +192,16 @@ export default function Agendar() {
     }
     // seguro pelo `podeAgendarCriacao` acima: a chave existe no mapa.
     const procedimentoId = r.dados.consultaPorEspecialidade.get(especialidade.id)!;
-    confirmarCriacao(especialidade, grupo, slot, procedimentoId, slotsRestantes);
-  }
-
-  function confirmarCriacao(
-    especialidade: Especialidade,
-    grupo: GrupoProfissional,
-    slot: SlotDisponibilidade,
-    procedimentoId: number,
-    slotsRestantes: SlotDisponibilidade[]
-  ) {
-    setCriacao({ fase: 'confirmando', especialidade, grupo, slot, procedimentoId, slotsRestantes });
     const nomeProf = grupo.tratamento ? `${grupo.tratamento} ${grupo.nome}` : grupo.nome;
+    setCriacao({ fase: 'escolher_hora', especialidade, grupo, slots, dia: slot.data });
     Alert.alert(
       'Confirmar agendamento?',
       `${especialidade.nome} com ${nomeProf}\n${formatData(slot.data)} às ${slot.horario.slice(0, 5)}`,
       [
-        {
-          text: 'Voltar',
-          style: 'cancel',
-          onPress: () => setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsRestantes }),
-        },
+        { text: 'Voltar', style: 'cancel' },
         {
           text: 'Confirmar',
-          onPress: () => executarCriacao(grupo, slot, procedimentoId, especialidade, slotsRestantes),
+          onPress: () => executarCriacao(grupo, slot, procedimentoId, especialidade, slots),
         },
       ]
     );
@@ -206,7 +212,7 @@ export default function Agendar() {
     slot: SlotDisponibilidade,
     procedimentoId: number,
     especialidade: Especialidade,
-    slotsRestantes: SlotDisponibilidade[]
+    slots: SlotDisponibilidade[]
   ) {
     setCriacao({ fase: 'criando', grupo, slot, procedimentoId });
     const r = await criarAgendamento({
@@ -219,27 +225,15 @@ export default function Agendar() {
     });
     if (!r.ok) {
       Alert.alert('Não foi possível agendar', mensagemErro(r.tipo, r.mensagem));
-      // 🔴 Slot ocupado por outra pessoa: a lista em mãos está PROVADAMENTE velha, então
-      //    aqui vale pagar a rede de novo — mostrar de volta a mesma lista faria o
-      //    cliente reescolher um horário que já não existe. Nos demais erros a lista
-      //    continua válida e não refazemos a busca.
-      if (r.tipo === 'conflito' && etapa.fase === 'horarios') {
-        const locaisPorId = new Map(etapa.opcoes.locais.map((l) => [l.id, l]));
-        setCriacao({ fase: 'carregando_catalogo', especialidade, grupo, slot });
-        const novo = await getDisponibilidade({ especialidadeId: especialidade.id }, locaisPorId);
-        setCriacao({
-          fase: 'escolher_slot',
-          especialidade,
-          grupo,
-          slots: novo.ok
-            ? novo.dados
-                .filter((sl) => sl.profissionalId === grupo.profissionalId)
-                .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario))
-            : [],
-        });
+      // Conflito: a agenda em mãos está PROVADAMENTE velha — recarrega. Nos demais
+      // erros ela continua válida e não pagamos a rede de novo.
+      if (r.tipo === 'conflito') {
+        setCriacao({ fase: 'carregando_agenda', especialidade, grupo });
+        const novos = await carregarAgendaDoProfissional(especialidade, grupo);
+        setCriacao({ fase: 'escolher_dia', especialidade, grupo, slots: novos ?? [] });
         return;
       }
-      setCriacao({ fase: 'escolher_slot', especialidade, grupo, slots: slotsRestantes });
+      setCriacao({ fase: 'escolher_hora', especialidade, grupo, slots, dia: slot.data });
       return;
     }
     setCriacao(null);
@@ -248,14 +242,38 @@ export default function Agendar() {
 
   // ── Sub-tela de criação, sobrepõe o fluxo normal enquanto ativa ──
   if (criacao) {
+    const emEspera =
+      criacao.fase === 'carregando_agenda' ||
+      criacao.fase === 'carregando_catalogo' ||
+      criacao.fase === 'criando';
+
+    // Voltar é contextual: da hora volta pro calendário, do calendário sai do fluxo.
+    const voltar = () => {
+      if (criacao.fase === 'escolher_hora') {
+        setCriacao({
+          fase: 'escolher_dia',
+          especialidade: criacao.especialidade,
+          grupo: criacao.grupo,
+          slots: criacao.slots,
+        });
+        return;
+      }
+      setCriacao(null);
+    };
+
+    const horasDoDia =
+      criacao.fase === 'escolher_hora'
+        ? criacao.slots.filter((sl) => sl.data === criacao.dia)
+        : [];
+
     return (
-      <Screen titulo="Escolher horário" scroll={criacao.fase === 'escolher_slot'}>
-        <Pressable onPress={() => setCriacao(null)} style={s.voltar}>
+      <Screen titulo={criacao.fase === 'escolher_hora' ? 'Escolher horário' : 'Escolher data'}>
+        <Pressable onPress={voltar} style={s.voltar}>
           <Ionicons name="chevron-back" size={18} color={color.navy} />
           <Text style={s.voltarTxt}>Voltar</Text>
         </Pressable>
 
-        {criacao.fase === 'carregando_catalogo' || criacao.fase === 'confirmando' || criacao.fase === 'criando' ? (
+        {emEspera ? (
           <ActivityIndicator color={color.navy} style={{ marginTop: space.xl }} />
         ) : criacao.fase === 'erro_catalogo' ? (
           <Aviso tom="info" icone="information-circle" texto={mensagemErro(criacao.tipo, criacao.mensagem)} />
@@ -265,25 +283,51 @@ export default function Agendar() {
             icone="information-circle"
             texto={`Agendamento online de ${criacao.especialidade.nome} ainda não está disponível pelo app. Ligue pra clínica pra marcar.`}
           />
-        ) : criacao.fase === 'erro_criar' ? (
-          <Aviso tom="info" icone="information-circle" texto={criacao.mensagem} />
-        ) : criacao.slots.length === 0 ? (
-          <Card style={s.vazio}>
-            <Text style={s.vazioTexto}>Nenhum outro horário livre com este profissional nos próximos dias.</Text>
-          </Card>
-        ) : (
-          criacao.slots.map((slot, i) => (
-            <Pressable
-              key={`${slot.data}-${slot.horario}-${i}`}
-              onPress={() => escolherSlot(criacao.especialidade, criacao.grupo, slot, criacao.slots)}
-            >
-              <Card style={s.linhaSlot}>
-                <Text style={s.linhaTitulo}>{formatData(slot.data)}</Text>
-                <Text style={s.linhaSub}>{slot.horario.slice(0, 5)}</Text>
-              </Card>
-            </Pressable>
-          ))
-        )}
+        ) : criacao.fase === 'escolher_dia' ? (
+          criacao.slots.length === 0 ? (
+            <Card style={s.vazio}>
+              <Text style={s.vazioTexto}>
+                Nenhum horário livre com este profissional nos próximos dias.
+              </Text>
+            </Card>
+          ) : (
+            <Card>
+              <Text style={s.profTitulo}>
+                {criacao.grupo.tratamento
+                  ? `${criacao.grupo.tratamento} ${criacao.grupo.nome}`
+                  : criacao.grupo.nome}
+              </Text>
+              <Text style={s.profSub}>Toque em um dia com vaga.</Text>
+              <CalendarioMes
+                diasComVaga={[...new Set(criacao.slots.map((sl) => sl.data))]}
+                onEscolherDia={(dia) =>
+                  setCriacao({
+                    fase: 'escolher_hora',
+                    especialidade: criacao.especialidade,
+                    grupo: criacao.grupo,
+                    slots: criacao.slots,
+                    dia,
+                  })
+                }
+              />
+            </Card>
+          )
+        ) : criacao.fase === 'escolher_hora' ? (
+          <>
+            <Text style={s.diaEscolhido}>{formatData(criacao.dia)}</Text>
+            <View style={s.gradeHoras}>
+              {horasDoDia.map((slot, i) => (
+                <Pressable
+                  key={`${slot.horario}-${i}`}
+                  style={s.chipHora}
+                  onPress={() => escolherSlot(criacao.especialidade, criacao.grupo, slot, criacao.slots)}
+                >
+                  <Text style={s.chipHoraTexto}>{slot.horario.slice(0, 5)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
       </Screen>
     );
   }
@@ -414,7 +458,7 @@ export default function Agendar() {
             <View key={unidadeId}>
               <Titulo>{unidade?.nomeFantasia ?? 'Unidade'}</Titulo>
               {grupos.map((g) => (
-                <Pressable key={g.profissionalId} onPress={() => iniciarCriacao(especialidade, g, slots)}>
+                <Pressable key={g.profissionalId} onPress={() => iniciarCriacao(especialidade, g)}>
                   <Card style={s.linhaProf}>
                     <View style={s.linhaIcon}>
                       <Ionicons name="person" size={18} color={color.navy} />
@@ -465,6 +509,24 @@ const s = StyleSheet.create({
   faixa: { fontFamily: font.medium, fontSize: size.xs, color: color.navy600, marginTop: 4 },
   voltar: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: space.md },
   voltarTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
-  linhaSlot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.sm },
+  profTitulo: { fontFamily: font.bold, fontSize: size.base, color: color.ink },
+  profSub: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: 2, marginBottom: space.lg },
+  diaEscolhido: {
+    fontFamily: font.bold,
+    fontSize: size.base,
+    color: color.ink,
+    marginBottom: space.md,
+    textTransform: 'capitalize',
+  },
+  gradeHoras: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chipHora: {
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
+    backgroundColor: color.greenBg,
+    borderWidth: 1,
+    borderColor: color.greenDeep,
+  },
+  chipHoraTexto: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
 });
 // ── FIM BLOCO ──
