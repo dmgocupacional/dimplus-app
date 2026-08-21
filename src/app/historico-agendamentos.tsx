@@ -12,7 +12,8 @@
 // 🔴 O shape do item NÃO foi confirmado ao vivo (ver `types.ts`): qualquer campo pode vir
 // `null` exceto `id`. Esta tela tolera isso — nunca esconde um item por campo faltando.
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Aviso, Card, Pill, Screen } from '@/components/ui';
@@ -96,9 +97,17 @@ export default function HistoricoAgendamentos() {
     setCarga({ estado: 'pronto', lista: passados });
   }, []);
 
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
+  // 🔴 useFocusEffect, NÃO useEffect. A tela fica na pilha de navegação: ao criar um
+  //    agendamento e voltar para cá, o componente era reaproveitado sem remontar, o
+  //    efeito não rodava de novo e a lista mostrada era a ANTIGA — dando a impressão de
+  //    que o agendamento não tinha sido criado (visto em campo 21/08/2026: o registro
+  //    existia na Feegow e a tela não o mostrava). Recarregar no foco cobre também o
+  //    cancelamento feito na recepção enquanto o app estava aberto.
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar])
+  );
 
   if (carga.estado === 'carregando') {
     return (

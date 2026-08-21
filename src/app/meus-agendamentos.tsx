@@ -16,7 +16,8 @@
 // inteira (payload gigante, §2 do FEEGOW-LEITURA). Sem `profissionalId`, o caminho é
 // cancelar e marcar de novo por `/agendar`.
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CalendarioMes } from '@/components/CalendarioMes';
@@ -133,9 +134,17 @@ export default function MeusAgendamentos() {
     setCarga({ estado: 'pronto', lista: separarPorData(comNomes, hojeIsoLocal()).futuros, opcoes: rOpcoes.ok ? rOpcoes.dados : null });
   }, []);
 
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
+  // 🔴 useFocusEffect, NÃO useEffect. A tela fica na pilha de navegação: ao criar um
+  //    agendamento e voltar para cá, o componente era reaproveitado sem remontar, o
+  //    efeito não rodava de novo e a lista mostrada era a ANTIGA — dando a impressão de
+  //    que o agendamento não tinha sido criado (visto em campo 21/08/2026: o registro
+  //    existia na Feegow e a tela não o mostrava). Recarregar no foco cobre também o
+  //    cancelamento feito na recepção enquanto o app estava aberto.
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar])
+  );
 
   function confirmarCancelamento(a: MeuAgendamento) {
     Alert.alert('Cancelar agendamento?', 'Isso libera o horário na agenda da clínica. Não dá pra desfazer.', [

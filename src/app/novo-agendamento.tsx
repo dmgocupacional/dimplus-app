@@ -269,7 +269,10 @@ export default function Agendar() {
       return;
     }
     setCriacao(null);
-    router.push('/meus-agendamentos' as never);
+    // `replace`, não `push`: com push o fluxo de marcação ficava na pilha e o "voltar"
+    // da lista devolvia o cliente para a tela de escolher horário do agendamento que
+    // ele acabou de criar.
+    router.replace('/meus-agendamentos' as never);
   }
 
   // ── Sub-tela de criação, sobrepõe o fluxo normal enquanto ativa ──
