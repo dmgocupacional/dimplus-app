@@ -19,7 +19,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CalendarioMes } from '@/components/CalendarioMes';
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
@@ -34,17 +34,17 @@ import {
 import type { FeegowErroTipo } from '@/lib/feegowApi';
 import { formatData } from '@/lib/format';
 import { atendeFaixa, idadeEm, rotuloFaixa } from '@/lib/idade';
-import type { Especialidade, SlotDisponibilidade } from '@/lib/types';
+import type { CatalogoProcedimentos, Especialidade, SlotDisponibilidade } from '@/lib/types';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 type Etapa =
   | { fase: 'carregando_opcoes' }
   | { fase: 'erro_opcoes'; tipo: FeegowErroTipo; mensagem: string }
-  | { fase: 'escolher_especialidade'; opcoes: Opcoes }
-  | { fase: 'carregando_horarios'; opcoes: Opcoes; especialidade: Especialidade }
-  | { fase: 'erro_horarios'; opcoes: Opcoes; especialidade: Especialidade; tipo: FeegowErroTipo; mensagem: string }
-  | { fase: 'horarios'; opcoes: Opcoes; especialidade: Especialidade; slots: SlotDisponibilidade[] };
+  | { fase: 'escolher_especialidade'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null }
+  | { fase: 'carregando_horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade }
+  | { fase: 'erro_horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade; tipo: FeegowErroTipo; mensagem: string }
+  | { fase: 'horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade; slots: SlotDisponibilidade[] };
 
 /** Sub-fluxo de criação — mesmo padrão da remarcação em `meus-agendamentos.tsx`: vive
  * sobre a mesma tela, não é navegação. Os slots do profissional escolhido já vêm da
@@ -119,34 +119,66 @@ type GrupoProfissional = {
   datas: string[]; // ordenadas, únicas
 };
 
+/** Ícone por área, casando por palavra-chave no nome. Sem mapa fixo por id: a lista de
+ *  especialidades muda na Feegow e um id novo cairia sem ícone nenhum. `medkit` é o
+ *  fallback — nunca fica sem ícone. */
+function iconeEspecialidade(nome: string): keyof typeof Ionicons.glyphMap {
+  const n = nome.toLowerCase();
+  if (n.includes('gineco') || n.includes('obst')) return 'female';
+  if (n.includes('pediatr')) return 'happy';
+  if (n.includes('cardio') || n.includes('ecocardio')) return 'heart';
+  if (n.includes('dermato')) return 'hand-left';
+  if (n.includes('oftalmo')) return 'eye';
+  if (n.includes('otorrino')) return 'ear';
+  if (n.includes('psic') || n.includes('neuro')) return 'happy-outline';
+  if (n.includes('ortoped') || n.includes('traumato')) return 'body';
+  if (n.includes('nutri')) return 'nutrition';
+  if (n.includes('pneumo')) return 'fitness';
+  if (n.includes('cirurgia')) return 'cut';
+  if (n.includes('clinico') || n.includes('clínico') || n.includes('geriatr')) return 'medical';
+  if (n.includes('alergo') || n.includes('imuno')) return 'flower';
+  if (n.includes('radio') || n.includes('ultrasso') || n.includes('imagem')) return 'scan';
+  return 'medkit';
+}
+
 export default function Agendar() {
   const { cliente } = useSession();
   const [etapa, setEtapa] = useState<Etapa>({ fase: 'carregando_opcoes' });
   const [criacao, setCriacao] = useState<Criacao | null>(null);
+  const [busca, setBusca] = useState('');
 
   const carregarOpcoes = useCallback(async () => {
     setEtapa({ fase: 'carregando_opcoes' });
-    const r = await getOpcoes();
-    if (!r.ok) {
-      setEtapa({ fase: 'erro_opcoes', tipo: r.tipo, mensagem: r.mensagem });
+    // Catálogo junto das opções, em paralelo: é ele que diz QUAIS especialidades dá pra
+    // agendar pelo app. Sem isso a tela listava as 39 e o cliente só descobria que a
+    // dele não dava depois de escolher médico, dia e horário — levava o "não" no fim.
+    const [op, cat] = await Promise.all([getOpcoes(), getProcedimentos()]);
+    if (!op.ok) {
+      setEtapa({ fase: 'erro_opcoes', tipo: op.tipo, mensagem: op.mensagem });
       return;
     }
-    setEtapa({ fase: 'escolher_especialidade', opcoes: r.dados });
+    // Catálogo é COMPLEMENTO, não requisito: se ele falhar, a tela ainda abre (com todas
+    // as especialidades) em vez de morrer. Degrada, não quebra.
+    setEtapa({ fase: 'escolher_especialidade', opcoes: op.dados, catalogo: cat.ok ? cat.dados : null });
   }, []);
 
   useEffect(() => {
     void carregarOpcoes();
   }, [carregarOpcoes]);
 
-  async function escolherEspecialidade(opcoes: Opcoes, especialidade: Especialidade) {
-    setEtapa({ fase: 'carregando_horarios', opcoes, especialidade });
+  async function escolherEspecialidade(
+    opcoes: Opcoes,
+    catalogo: CatalogoProcedimentos | null,
+    especialidade: Especialidade
+  ) {
+    setEtapa({ fase: 'carregando_horarios', opcoes, catalogo, especialidade });
     const locaisPorId = new Map(opcoes.locais.map((l) => [l.id, l]));
     const r = await getDisponibilidade({ especialidadeId: especialidade.id }, locaisPorId);
     if (!r.ok) {
-      setEtapa({ fase: 'erro_horarios', opcoes, especialidade, tipo: r.tipo, mensagem: r.mensagem });
+      setEtapa({ fase: 'erro_horarios', opcoes, catalogo, especialidade, tipo: r.tipo, mensagem: r.mensagem });
       return;
     }
-    setEtapa({ fase: 'horarios', opcoes, especialidade, slots: r.dados });
+    setEtapa({ fase: 'horarios', opcoes, catalogo, especialidade, slots: r.dados });
   }
 
   // ── Sub-fluxo de criação (S2-L4b) ────────────────────────────────────────
@@ -349,24 +381,77 @@ export default function Agendar() {
   }
 
   if (etapa.fase === 'escolher_especialidade') {
-    const { opcoes } = etapa;
+    const { opcoes, catalogo } = etapa;
+
+    // 🔴 Só entram as que dá PRA AGENDAR de fato — decisão do Henrique em 21/08/2026.
+    //    Das 39 especialidades da clínica, 6 têm vínculo de procedimento confiável; as
+    //    outras usam o `consulta_id` default (8), que aponta errado e faria a Feegow
+    //    recusar. Antes elas apareciam e o cliente só levava o "não" no fim do fluxo.
+    //    Sem catálogo (ele falhou), mostramos TODAS: melhor oferecer demais do que
+    //    apresentar uma tela vazia por causa de uma chamada que caiu.
+    const agendaveis = catalogo
+      ? opcoes.especialidades.filter((e) => podeAgendarCriacao(catalogo, e.id))
+      : opcoes.especialidades;
+
+    const termo = busca.trim().toLowerCase();
+    const visiveis = termo
+      ? agendaveis.filter((e) => e.nome.toLowerCase().includes(termo))
+      : agendaveis;
+
     return (
       <Screen titulo="Novo agendamento">
         <Titulo>Escolha a especialidade</Titulo>
-        {opcoes.especialidades.length === 0 ? (
+
+        {/* Busca só aparece quando há lista suficiente para valer a pena procurar. */}
+        {agendaveis.length > 6 ? (
+          <View style={s.buscaCaixa}>
+            <Ionicons name="search" size={16} color={color.ink3} />
+            <TextInput
+              style={s.buscaInput}
+              value={busca}
+              onChangeText={setBusca}
+              placeholder="Buscar especialidade"
+              placeholderTextColor={color.ink3}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {busca.length > 0 ? (
+              <Pressable onPress={() => setBusca('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={color.ink3} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {visiveis.length === 0 ? (
           <Card style={s.vazio}>
-            <Text style={s.vazioTexto}>Nenhuma especialidade disponível pra agendamento online no momento.</Text>
+            <Text style={s.vazioTexto}>
+              {termo
+                ? `Nada encontrado para "${busca}".`
+                : 'Nenhuma especialidade disponível pra agendamento online no momento.'}
+            </Text>
           </Card>
         ) : (
-          opcoes.especialidades.map((e) => (
-            <Pressable key={e.id} onPress={() => escolherEspecialidade(opcoes, e)}>
+          visiveis.map((e) => (
+            <Pressable key={e.id} onPress={() => escolherEspecialidade(opcoes, catalogo, e)}>
               <Card style={s.linhaEsp}>
+                <View style={s.espIcone}>
+                  <Ionicons name={iconeEspecialidade(e.nome)} size={18} color={color.navy} />
+                </View>
                 <Text style={s.linhaEspTxt}>{e.nome}</Text>
                 <Ionicons name="chevron-forward" size={18} color={color.ink3} />
               </Card>
             </Pressable>
           ))
         )}
+
+        {/* As não-agendáveis ficam FORA da lista, mas a clínica atende muito mais que
+            isto — sem esta linha a tela sugere que só existem estas especialidades. */}
+        {catalogo && !termo ? (
+          <Text style={s.rodapeTelefone}>
+            Outras especialidades são agendadas pela central de atendimento.
+          </Text>
+        ) : null}
       </Screen>
     );
   }
@@ -488,13 +573,43 @@ export default function Agendar() {
 const s = StyleSheet.create({
   vazio: { alignItems: 'center', paddingVertical: space.xl, gap: space.sm },
   vazioTexto: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, textAlign: 'center' },
+  buscaCaixa: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: color.white,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    marginBottom: space.md,
+  },
+  buscaInput: { flex: 1, fontFamily: font.regular, fontSize: size.base, color: color.ink, padding: 0 },
+  espIcone: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    backgroundColor: color.greenBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.md,
+  },
+  rodapeTelefone: {
+    fontFamily: font.regular,
+    fontSize: size.sm,
+    color: color.ink3,
+    textAlign: 'center',
+    marginTop: space.lg,
+    marginBottom: space.sm,
+  },
   linhaEsp: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: space.sm,
   },
-  linhaEspTxt: { fontFamily: font.bold, fontSize: size.base, color: color.ink },
+  linhaEspTxt: { flex: 1, fontFamily: font.bold, fontSize: size.base, color: color.ink },
   linhaProf: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, marginBottom: space.sm },
   linhaIcon: {
     width: 38,
