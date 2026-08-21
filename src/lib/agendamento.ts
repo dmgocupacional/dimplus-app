@@ -243,6 +243,23 @@ function extrairTexto(o: Record<string, unknown>, candidatos: string[]): string 
   return null;
 }
 
+/**
+ * 🔴 `appoints/search` devolve a data em d-m-Y ("05-09-2026"), NÃO em ISO. O resto do app
+ *    (comparação de futuro/passado, agrupamento por dia do calendário, `formatData`)
+ *    assume `AAAA-MM-DD`. Sem converter aqui, `"05-09-2026" >= "2026-08-21"` é FALSO na
+ *    comparação de texto e TODO agendamento ativo era classificado como passado —
+ *    sumindo de "Meus agendamentos" (visto em campo 21/08/2026).
+ *    A conversão fica na fronteira: uma vez normalizado, nada lá dentro precisa saber
+ *    que a Feegow usa outro formato. Já em ISO, passa direto.
+ */
+function paraIso(data: string | null): string | null {
+  if (!data) return null;
+  const t = data.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(t);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
 function normalizarMeuAgendamento(item: unknown): MeuAgendamento | null {
   if (!item || typeof item !== 'object') return null;
   const o = item as Record<string, unknown>;
@@ -251,7 +268,7 @@ function normalizarMeuAgendamento(item: unknown): MeuAgendamento | null {
   return {
     id,
     profissionalId: paraNumero(o.profissional_id ?? o.ProfissionalID ?? o.id_profissional),
-    data: extrairTexto(o, ['data', 'Data', 'data_agendamento']),
+    data: paraIso(extrairTexto(o, ['data', 'Data', 'data_agendamento'])),
     horario: extrairTexto(o, ['horario', 'Horario', 'hora']),
     statusId: paraNumero(o.status_id ?? o.StatusID),
     profissionalNome: extrairTexto(o, ['profissional_nome', 'nome_profissional', 'ProfissionalNome']),
