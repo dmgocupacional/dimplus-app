@@ -434,6 +434,28 @@ export default function Agendar() {
                 : 'Nenhuma especialidade disponível pra agendamento online no momento.'}
             </Text>
           </Card>
+        ) : agendaveis.length > 6 ? (
+          // Lista compacta: mesmo limiar que liga a busca. Acima de 6 especialidades a
+          // grade de blocos grandes virava rolagem longa (31 itens = ~16 linhas) sem
+          // ganho de escaneabilidade — a busca já resolve achar rápido, então a lista
+          // compacta prioriza densidade. Toque ainda >= 44px (padding + altura da linha).
+          <View style={s.listaEsp}>
+            {visiveis.map((e) => (
+              <Pressable
+                key={e.id}
+                style={s.linhaEsp}
+                onPress={() => escolherEspecialidade(opcoes, catalogo, e)}
+              >
+                <View style={s.linhaEspIcone}>
+                  <Ionicons name={iconeEspecialidade(e.nome)} size={18} color={color.navy} />
+                </View>
+                <Text style={s.linhaEspTxt} numberOfLines={2}>
+                  {e.nome}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={color.ink3} />
+              </Pressable>
+            ))}
+          </View>
         ) : (
           // Grade de dois por linha: com poucas especialidades a lista deixava a tela
           // vazia, e o bloco maior dá um alvo de toque melhor no celular.
@@ -607,6 +629,33 @@ const s = StyleSheet.create({
     marginBottom: space.sm,
   },
   gradeEsp: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  listaEsp: { gap: space.sm },
+  linhaEsp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: color.white,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    minHeight: 56,
+  },
+  linhaEspIcone: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: color.greenBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linhaEspTxt: {
+    flex: 1,
+    fontFamily: font.bold,
+    fontSize: size.sm,
+    color: color.ink,
+  },
   blocoEsp: {
     // 48% (e não 50%) para o `gap` caber sem estourar a linha e virar 1 coluna.
     width: '48%',
