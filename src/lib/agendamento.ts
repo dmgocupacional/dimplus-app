@@ -146,10 +146,22 @@ export async function getOpcoes(): Promise<FeegowResultado<Opcoes>> {
 
 // ─── Disponibilidade ────────────────────────────────────────────────────────
 
-/** Janela de busca. Maior que isso o payload cresce demais (§2 do FEEGOW-LEITURA: 4 dias
- * sem filtro já deu milhares de entradas); menor arrisca mostrar "sem horário" com
- * frequência mesmo havendo vaga um pouco mais à frente. Ajustável — não é contrato da API. */
-export const JANELA_DISPONIBILIDADE_DIAS = 21;
+/** Janela padrão de busca: 3 meses.
+ *
+ * 📏 MEDIDO ao vivo em 24/08/2026 antes de subir de 21 → 90 (não estimado):
+ *   - disponibilidade 90d ....... 553 KB (era ~130 KB em 21d)
+ *   - appoints/search 90d ....... 4,2 MB / 6.771 registros
+ * O medo de que 90 dias multiplicasse o payload por 4 não se confirmou: o volume
+ * despenca com a distância (ago 4.531 · set 2.145 · out 84 · nov 11). Quase tudo que a
+ * poda carrega já estava nos primeiros 30 dias, que a janela de 21 já pagava. */
+export const JANELA_DISPONIBILIDADE_DIAS = 90;
+
+/** Teto da busca ESTENDIDA, usada só quando a janela padrão volta vazia.
+ *
+ * 🔴 A Feegow recusa com 409 qualquer intervalo >= 6 meses (vale para
+ * `available-schedule` E para `appoints/search`). 175 dias deixa margem de segurança
+ * contra virada de mês/ano — NUNCA subir isto para 180. */
+export const JANELA_ESTENDIDA_DIAS = 175;
 
 function isoOffsetDias(dias: number): string {
   const d = new Date();
@@ -168,7 +180,11 @@ function isoOffsetDias(dias: number): string {
  * FEEGOW-LEITURA.md, que eu tinha lido errado na primeira versão desta função — o teste
  * contra dado real (não só tsc) foi o que pegou isso.
  */
-function achatarDisponibilidade(cru: unknown, locaisPorId: Map<number, LocalAgenda>): SlotDisponibilidade[] {
+function achatarDisponibilidade(
+  cru: unknown,
+  locaisPorId: Map<number, LocalAgenda>,
+  resumo = false
+): SlotDisponibilidade[] {
   if (!cru || typeof cru !== 'object') return [];
   const envelope = cru as Record<string, unknown>;
   const porProfissional = envelope.profissional_id;
@@ -195,6 +211,13 @@ function achatarDisponibilidade(cru: unknown, locaisPorId: Map<number, LocalAgen
         for (const h of horarios) {
           if (typeof h !== 'string') continue;
           slots.push({ profissionalId, localId: local.id, unidadeId: local.unidadeId, data, horario: h });
+          // 🔴 MODO RESUMO: com a janela de 90 dias o achatamento completo dava 47.568
+          // objetos (medido 24/08/2026) — o suficiente para engasgar aparelho fraco.
+          // Quem só precisa saber QUEM atende e em QUE DIA (a tela de especialidade
+          // nunca lê `horario`) para no primeiro horário de cada data. A tela de escolha
+          // de hora continua pedindo a lista completa, e aí a janela é de um profissional
+          // só — ordens de grandeza menor.
+          if (resumo) break;
         }
       }
     }
@@ -202,14 +225,25 @@ function achatarDisponibilidade(cru: unknown, locaisPorId: Map<number, LocalAgen
   return slots;
 }
 
-export async function getDisponibilidade(
+/** Resultado da disponibilidade. `estendida` = a janela padrão de 3 meses voltou vazia e
+ *  os slots vieram de uma segunda busca, mais longe. A tela usa isso para avisar o
+ *  cliente de que a data é distante — sem isso ele acha que houve erro. */
+export interface Disponibilidade {
+  slots: SlotDisponibilidade[];
+  estendida: boolean;
+}
+
+async function buscarJanela(
   filtros: { especialidadeId?: number; profissionalId?: number },
-  locaisPorId: Map<number, LocalAgenda>
+  locaisPorId: Map<number, LocalAgenda>,
+  deDias: number,
+  ateDias: number,
+  resumo: boolean
 ): Promise<FeegowResultado<SlotDisponibilidade[]>> {
   const params: Record<string, string> = {
     tipo: 'A',
-    data_inicio: isoOffsetDias(0),
-    data_fim: isoOffsetDias(JANELA_DISPONIBILIDADE_DIAS),
+    data_inicio: isoOffsetDias(deDias),
+    data_fim: isoOffsetDias(ateDias),
   };
   if (filtros.especialidadeId !== undefined) params.especialidade_id = String(filtros.especialidadeId);
   if (filtros.profissionalId !== undefined) params.profissional_id = String(filtros.profissionalId);
@@ -218,7 +252,46 @@ export async function getDisponibilidade(
     `/api/feegow/agendamento/disponibilidade?${qs.toString()}`
   );
   if (!r.ok) return r;
-  return { ok: true, dados: achatarDisponibilidade(r.dados.disponibilidade, locaisPorId) };
+  return { ok: true, dados: achatarDisponibilidade(r.dados.disponibilidade, locaisPorId, resumo) };
+}
+
+/**
+ * Disponibilidade dos próximos `JANELA_DISPONIBILIDADE_DIAS` dias.
+ *
+ * Se essa janela não tiver NENHUM slot, busca automaticamente o trecho seguinte
+ * (90 → 175 dias) e marca o resultado como `estendida`. Motivo: especialidade com agenda
+ * escassa cuja próxima vaga é só daqui a 4 meses aparecia como "sem horário", o que é
+ * mentira — havia vaga, só não na janela que a gente pedia.
+ *
+ * A segunda chamada custa pouco: lá na frente a agenda é quase vazia (out/2026 tinha 84
+ * agendamentos no mês inteiro contra 4.531 em ago), então a poda no servidor tem pouco
+ * o que cruzar. E ela só dispara no caso raro — o caminho comum segue com uma chamada só.
+ *
+ * `resumo` (default true) emite um slot por profissional+dia em vez de um por horário.
+ * Use `false` só quando os horários em si forem exibidos.
+ */
+export async function getDisponibilidade(
+  filtros: { especialidadeId?: number; profissionalId?: number },
+  locaisPorId: Map<number, LocalAgenda>,
+  opcoes: { resumo?: boolean } = {}
+): Promise<FeegowResultado<Disponibilidade>> {
+  const resumo = opcoes.resumo ?? true;
+
+  const perto = await buscarJanela(filtros, locaisPorId, 0, JANELA_DISPONIBILIDADE_DIAS, resumo);
+  if (!perto.ok) return perto;
+  if (perto.dados.length > 0) return { ok: true, dados: { slots: perto.dados, estendida: false } };
+
+  const longe = await buscarJanela(
+    filtros,
+    locaisPorId,
+    JANELA_DISPONIBILIDADE_DIAS,
+    JANELA_ESTENDIDA_DIAS,
+    resumo
+  );
+  // Falha na busca estendida NÃO vira erro de tela: a janela padrão respondeu bem, ela
+  // só estava vazia. Devolver "sem horário" é o resultado honesto nesse caso.
+  if (!longe.ok) return { ok: true, dados: { slots: [], estendida: false } };
+  return { ok: true, dados: { slots: longe.dados, estendida: longe.dados.length > 0 } };
 }
 
 // ─── Meus agendamentos ──────────────────────────────────────────────────────

@@ -181,12 +181,16 @@ export default function MeusAgendamentos() {
       opcoes = rOpcoes.dados;
     }
     const locaisPorId = new Map(opcoes.locais.map((l) => [l.id, l]));
-    const rDisp = await getDisponibilidade({ profissionalId: a.profissionalId }, locaisPorId);
+    // `resumo: false` — esta tela mostra os HORÁRIOS para remarcar, não só os dias.
+    // Janela de um profissional só, então o volume é pequeno mesmo em 3 meses.
+    const rDisp = await getDisponibilidade({ profissionalId: a.profissionalId }, locaisPorId, {
+      resumo: false,
+    });
     if (!rDisp.ok) {
       setRemarcacao({ fase: 'erro', agendamento: a, tipo: rDisp.tipo, mensagem: rDisp.mensagem });
       return;
     }
-    setRemarcacao({ fase: 'escolher_dia', agendamento: a, slots: rDisp.dados });
+    setRemarcacao({ fase: 'escolher_dia', agendamento: a, slots: rDisp.dados.slots });
   }
 
   function confirmarRemarcacao(
@@ -260,7 +264,7 @@ export default function MeusAgendamentos() {
           <Aviso tom="info" icone="information-circle" texto={mensagemErro(remarcacao.tipo, remarcacao.mensagem)} />
         ) : remarcacao.slots.length === 0 ? (
           <Card style={s.vazio}>
-            <Text style={s.vazioTexto}>Nenhum outro horário livre com este profissional nos próximos dias.</Text>
+            <Text style={s.vazioTexto}>Nenhum outro horário livre com este profissional nos próximos 6 meses.</Text>
           </Card>
         ) : remarcacao.fase === 'escolher_dia' ? (
           <Card>

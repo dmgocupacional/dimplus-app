@@ -44,7 +44,7 @@ type Etapa =
   | { fase: 'escolher_especialidade'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null }
   | { fase: 'carregando_horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade }
   | { fase: 'erro_horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade; tipo: FeegowErroTipo; mensagem: string }
-  | { fase: 'horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade; slots: SlotDisponibilidade[] };
+  | { fase: 'horarios'; opcoes: Opcoes; catalogo: CatalogoProcedimentos | null; especialidade: Especialidade; slots: SlotDisponibilidade[]; estendida: boolean };
 
 /** Sub-fluxo de criação — mesmo padrão da remarcação em `meus-agendamentos.tsx`: vive
  * sobre a mesma tela, não é navegação. Os slots do profissional escolhido já vêm da
@@ -178,7 +178,7 @@ export default function Agendar() {
       setEtapa({ fase: 'erro_horarios', opcoes, catalogo, especialidade, tipo: r.tipo, mensagem: r.mensagem });
       return;
     }
-    setEtapa({ fase: 'horarios', opcoes, catalogo, especialidade, slots: r.dados });
+    setEtapa({ fase: 'horarios', opcoes, catalogo, especialidade, slots: r.dados.slots, estendida: r.dados.estendida });
   }
 
   // ── Sub-fluxo de criação (S2-L4b) ────────────────────────────────────────
@@ -193,9 +193,11 @@ export default function Agendar() {
   ): Promise<SlotDisponibilidade[] | null> {
     if (etapa.fase !== 'horarios') return null;
     const locaisPorId = new Map(etapa.opcoes.locais.map((l) => [l.id, l]));
-    const r = await getDisponibilidade({ profissionalId: grupo.profissionalId }, locaisPorId);
+    const r = await getDisponibilidade({ profissionalId: grupo.profissionalId }, locaisPorId, {
+      resumo: false,
+    });
     if (!r.ok) return null;
-    return r.dados
+    return r.dados.slots
       .filter((sl) => sl.profissionalId === grupo.profissionalId)
       .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
   }
@@ -322,7 +324,7 @@ export default function Agendar() {
           criacao.slots.length === 0 ? (
             <Card style={s.vazio}>
               <Text style={s.vazioTexto}>
-                Nenhum horário livre com este profissional nos próximos dias.
+                Nenhum horário livre com este profissional nos próximos 6 meses.
               </Text>
             </Card>
           ) : (
@@ -507,7 +509,7 @@ export default function Agendar() {
   }
 
   // fase === 'horarios'
-  const { opcoes, especialidade, slots } = etapa;
+  const { opcoes, especialidade, slots, estendida } = etapa;
   const unidadesPorId = new Map(opcoes.unidades.map((u) => [u.id, u]));
   const profissionaisPorId = new Map(opcoes.profissionais.map((p) => [p.id, p]));
   const nascimento = cliente?.data_nascimento ?? null;
@@ -562,12 +564,19 @@ export default function Agendar() {
 
   return (
     <Screen titulo={especialidade.nome}>
+      {estendida && porUnidade.size > 0 ? (
+        <Aviso
+          tom="info"
+          icone="information-circle"
+          texto={`Não há vaga de ${especialidade.nome} nos próximos 3 meses. Estas são as próximas datas disponíveis.`}
+        />
+      ) : null}
       {porUnidade.size === 0 ? (
         <Card style={s.vazio}>
           <Ionicons name="calendar-outline" size={30} color={color.ink3} />
           <Text style={s.vazioTexto}>
-            Nenhum horário disponível nos próximos dias para {especialidade.nome}. Tente outra especialidade ou
-            volte em breve.
+            Nenhum horário disponível nos próximos 6 meses para {especialidade.nome}. Ligue pra clínica pra
+            conferir a agenda ou tente outra especialidade.
           </Text>
         </Card>
       ) : (
