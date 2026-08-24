@@ -407,8 +407,9 @@ export default function Agendar() {
       <Screen titulo="Novo agendamento">
         <Titulo>Escolha a especialidade</Titulo>
 
-        {/* Busca só aparece quando há lista suficiente para valer a pena procurar. */}
-        {agendaveis.length > 6 ? (
+        {/* Busca sempre disponível: com a grade de blocos, 31 especialidades dão ~16
+            linhas de rolagem, então procurar pelo nome é o caminho mais rápido. */}
+        {agendaveis.length > 0 ? (
           <View style={s.buscaCaixa}>
             <Ionicons name="search" size={16} color={color.ink3} />
             <TextInput
@@ -436,31 +437,12 @@ export default function Agendar() {
                 : 'Nenhuma especialidade disponível pra agendamento online no momento.'}
             </Text>
           </Card>
-        ) : agendaveis.length > 6 ? (
-          // Lista compacta: mesmo limiar que liga a busca. Acima de 6 especialidades a
-          // grade de blocos grandes virava rolagem longa (31 itens = ~16 linhas) sem
-          // ganho de escaneabilidade — a busca já resolve achar rápido, então a lista
-          // compacta prioriza densidade. Toque ainda >= 44px (padding + altura da linha).
-          <View style={s.listaEsp}>
-            {visiveis.map((e) => (
-              <Pressable
-                key={e.id}
-                style={s.linhaEsp}
-                onPress={() => escolherEspecialidade(opcoes, catalogo, e)}
-              >
-                <View style={s.linhaEspIcone}>
-                  <Ionicons name={iconeEspecialidade(e.nome)} size={18} color={color.navy} />
-                </View>
-                <Text style={s.linhaEspTxt} numberOfLines={2}>
-                  {e.nome}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={color.ink3} />
-              </Pressable>
-            ))}
-          </View>
         ) : (
-          // Grade de dois por linha: com poucas especialidades a lista deixava a tela
-          // vazia, e o bloco maior dá um alvo de toque melhor no celular.
+          // Grade de dois por linha, SEMPRE — independente da quantidade.
+          // A lista compacta (v0.14.0) trocava esta grade por linhas acima de 6 itens;
+          // removida a pedido do Henrique em 24/08/2026: o bloco é o layout que ele
+          // quer na tela. Custo aceito conscientemente: 31 especialidades = ~16 linhas
+          // de rolagem — por isso a busca acima virou permanente, não some mais.
           <View style={s.gradeEsp}>
             {visiveis.map((e) => (
               <Pressable
@@ -638,33 +620,6 @@ const s = StyleSheet.create({
     marginBottom: space.sm,
   },
   gradeEsp: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
-  listaEsp: { gap: space.sm },
-  linhaEsp: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    backgroundColor: color.white,
-    borderWidth: 1,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.md,
-    minHeight: 56,
-  },
-  linhaEspIcone: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    backgroundColor: color.greenBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  linhaEspTxt: {
-    flex: 1,
-    fontFamily: font.bold,
-    fontSize: size.sm,
-    color: color.ink,
-  },
   blocoEsp: {
     // 48% (e não 50%) para o `gap` caber sem estourar a linha e virar 1 coluna.
     width: '48%',
