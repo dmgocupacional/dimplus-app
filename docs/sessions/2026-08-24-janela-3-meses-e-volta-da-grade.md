@@ -150,6 +150,22 @@ Validado no aparelho pelo Henrique: cards lado a lado de volta ✅ e janela de 3
    `.eslintrc`). Validação foi `tsc` + testes de comportamento. Não é regressão desta
    sessão, mas é um furo de pipeline.
 
+## ⚠️ O que fechou foi o S2, NÃO o app
+
+Registro de uma correção do Henrique nesta sessão. Eu afirmei que "o app não tem fila de
+engenharia conhecida" — **errado**. O que fechou foi a trilha **S2 (agendamento)**.
+
+O app tem **6 dos 8 módulos por construir** (cartão, rede, financeiro, ajuda, telemedicina,
+SOS) e três bloqueios de lançamento que nenhum commit resolve: **OTP travado por decisão**
+(Henrique + Thiago), **contas Apple/Google não contratadas** (sem elas não publica) e
+**~18% da base sem cadastro utilizável** no dia 1.
+
+A fila do app hoje **não é técnica — é decisão e logística.** Detalhe em
+`erp-dimplus/docs/sessions/2026-08-24-proxima-sprint.md` e, como fonte de verdade,
+`erp-dimplus/docs/ROADMAP-APP.md`.
+
+**Próxima frente decidida: contratos, no `erp-dimplus`.** App pausado, não encerrado.
+
 ## Como isto foi validado
 
 `tsc` limpo nos dois repos · build do Next passou · **e**, porque verde de compilador não
