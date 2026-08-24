@@ -59,6 +59,25 @@ bloco é o que economiza o seu dia.
 
 **Regra que sai disso: filtro e limite da Feegow não se confia, se verifica.**
 
+### Medições de volume — 24/08/2026 (use estas, não extrapole)
+
+Feitas ao vivo antes de subir a janela de 21 → 90 dias. **A curva de agenda é fortemente
+decrescente — projeção linear erra feio** (a linear dava 29 MB; o real foi 4,2 MB).
+
+| janela | `available-schedule` | `appoints/search` | slots achatados |
+|---|---|---|---|
+| 21 dias | ~130 KB | — | ~11 mil |
+| **90 dias** | **553 KB** | **4,2 MB / 6.771 reg.** | **47.568** |
+
+Agendamentos por mês: ago **4.531** · set **2.145** · out **84** · nov **11**.
+Quase todo o volume está nos primeiros 30 dias.
+
+🔴 **`JANELA_ESTENDIDA_DIAS = 175`, nunca 180** — `appoints/search` recusa >= 6 meses.
+
+🔴 **A rota de disponibilidade do ERP precisa de `maxDuration = 60`**, não 30: ela faz
+duas chamadas Feegow em série e cada uma tem timeout de 30s. Corte na segunda devolve
+`podado: false` e ressuscita o 409 silencioso.
+
 ## 🔜 Próximas frentes (definidas 21/08/2026)
 
 Nada disto está começado. Em ordem de valor:
