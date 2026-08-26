@@ -16,6 +16,46 @@ export function formatCPF(cpf: string): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+// ═══ MÁSCARAS DE DIGITAÇÃO ═══
+// 26/08/2026. Diferentes de `formatCPF`: aquela é para EXIBIR um valor completo e faz
+// `padStart`, o que num campo de digitação transformaria "1" em "000.000.000-01". Estas
+// formatam PARCIALMENTE, conforme a pessoa digita.
+//
+// ⚠️ Só afetam o que aparece na tela. `/api/public/app-cadastro` e `/api/public/app-login`
+// aceitam `min(11).max(18)` e normalizam no servidor, então o valor mascarado trafega sem
+// problema — foi conferido antes de aplicar.
+
+/** 000.000.000-00, parcial. */
+export function mascaraCPF(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+/**
+ * (00) 00000-0000, parcial. Trata celular (11 dígitos) e fixo (10).
+ *
+ * ⚠️ Com 10 dígitos o corte é 4+4, com 11 é 5+4. Fixar em 5+4 sempre exibiria
+ * "(11) 3456-789" como "(11) 34567-89" enquanto a pessoa digita um fixo.
+ */
+export function mascaraTelefone(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : '';
+  const corte = d.length > 10 ? 7 : 6;
+  if (d.length <= corte) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, corte)}-${d.slice(corte)}`;
+}
+
+/** DD/MM/AAAA, parcial. */
+export function mascaraData(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
 /** Máscara parcial — o cartão não precisa expor o CPF inteiro na tela. */
 export function maskCPF(cpf: string): string {
   const d = cpf.replace(/\D/g, '').padStart(11, '0').slice(0, 11);

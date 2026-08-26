@@ -32,6 +32,7 @@ import {
   SENHA_MAX, SENHA_MIN, buscarTermoCadastro, cpfValido, paraE164, solicitarCadastro,
   type TermoCadastro,
 } from '@/lib/auth';
+import { mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 const FORMAS = [
@@ -242,7 +243,7 @@ export default function Cadastro() {
           <Campo
             rotulo="CPF"
             valor={cpf}
-            onChange={(v) => setCpf(v.replace(/\D/g, '').length <= 11 ? v : cpf)}
+            onChange={(v) => setCpf(mascaraCPF(v))}
             placeholder="000.000.000-00"
             keyboardType="number-pad"
             maxLength={14}
@@ -250,7 +251,7 @@ export default function Cadastro() {
           <Campo
             rotulo="Telefone com DDD"
             valor={telefone}
-            onChange={setTelefone}
+            onChange={(v) => setTelefone(mascaraTelefone(v))}
             placeholder="(11) 90000-0000"
             keyboardType="phone-pad"
             ajuda="Usamos para falar com você sobre o seu plano."
@@ -259,7 +260,7 @@ export default function Cadastro() {
           <Campo
             rotulo="Data de nascimento"
             valor={nascimento}
-            onChange={(v) => setNascimento(v.replace(/\D/g, '').length <= 8 ? v : nascimento)}
+            onChange={(v) => setNascimento(mascaraData(v))}
             placeholder="DD/MM/AAAA"
             keyboardType="number-pad"
             ajuda="Se você já é cliente, isso libera seu acesso na hora."

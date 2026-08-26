@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Campo } from '@/components/Campo';
 import { cpfValido, entrar } from '@/lib/auth';
+import { mascaraCPF } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 export default function Login() {
@@ -68,7 +69,7 @@ export default function Login() {
           <Campo
             rotulo="CPF"
             valor={cpf}
-            onChange={(v) => setCpf(v.replace(/\D/g, '').length <= 11 ? v : cpf)}
+            onChange={(v) => setCpf(mascaraCPF(v))}
             placeholder="000.000.000-00"
             keyboardType="number-pad"
             maxLength={14}
