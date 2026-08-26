@@ -56,6 +56,40 @@ export function mascaraData(v: string): string {
   return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
 }
 
+/**
+ * DD/MM/AAAA digitado → AAAA-MM-DD, ou null se não for data REAL.
+ *
+ * 🔴 Regex de formato NÃO basta: `31/02/2020` e `99/99/9999` passam por qualquer
+ * `\d{2}/\d{2}/\d{4}`. A conferência é por reconstrução — monta a data em UTC e checa se os
+ * três componentes sobreviveram. Fevereiro 31 vira 2 de março e os componentes não batem.
+ *
+ * ⚠️ UTC de propósito. `new Date(1990, 4, 10)` usa fuso local e, em runtime com TZ ≠ Brasília,
+ * devolveria o dia anterior — o mesmo problema de fuso que já mordeu em datas-cobranca.
+ *
+ * Limites espelham o CHECK `clientes_data_nascimento_sanidade`: depois de 1900-01-01 e antes
+ * de hoje. Manter alinhado — divergir aqui produz 500 opaco em vez de erro explicado.
+ */
+export function dataParaISO(v: string): string | null {
+  const d = v.replace(/\D/g, '');
+  if (d.length !== 8) return null;
+  const dia = Number(d.slice(0, 2));
+  const mes = Number(d.slice(2, 4));
+  const ano = Number(d.slice(4));
+  const dt = new Date(Date.UTC(ano, mes - 1, dia));
+  if (
+    dt.getUTCFullYear() !== ano ||
+    dt.getUTCMonth() !== mes - 1 ||
+    dt.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+  const hoje = new Date();
+  const hojeUTC = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  if (dt.getTime() >= hojeUTC) return null;
+  if (ano < 1900) return null;
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
 /** Máscara parcial — o cartão não precisa expor o CPF inteiro na tela. */
 export function maskCPF(cpf: string): string {
   const d = cpf.replace(/\D/g, '').padStart(11, '0').slice(0, 11);

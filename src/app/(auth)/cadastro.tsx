@@ -32,7 +32,7 @@ import {
   SENHA_MAX, SENHA_MIN, buscarTermoCadastro, cpfValido, paraE164, solicitarCadastro,
   type TermoCadastro,
 } from '@/lib/auth';
-import { mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
+import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 const FORMAS = [
@@ -73,17 +73,14 @@ export default function Cadastro() {
     void (async () => setTermo(await buscarTermoCadastro()))();
   }, []);
 
-  // DD/MM/AAAA (o que a pessoa digita) → AAAA-MM-DD (o que a API compara). Devolve null
-  // quando incompleto ou fora de faixa — data pela metade não vira prova de nada.
-  const nascimentoISO = useCallback((): string | null => {
-    const d = nascimento.replace(/\D/g, '');
-    if (d.length !== 8) return null;
-    const dia_ = Number(d.slice(0, 2)), mes = Number(d.slice(2, 4)), ano = Number(d.slice(4));
-    if (dia_ < 1 || dia_ > 31 || mes < 1 || mes > 12 || ano < 1900) return null;
-    return `${ano}-${String(mes).padStart(2, '0')}-${String(dia_).padStart(2, '0')}`;
-  }, [nascimento]);
+  // Data real, não só formato. Ver dataParaISO: 31/02 e datas futuras são recusadas.
+  const nascimentoISO = useCallback(() => dataParaISO(nascimento), [nascimento]);
 
+  // 🔴 Data de nascimento OBRIGATÓRIA (decisão do Henrique, 26/08). Sem ela não há prova de
+  // identidade, e o pré-cadastrado cairia sempre na fila — que foi exatamente o que aconteceu
+  // no primeiro teste, em silêncio. Melhor recusar o envio do que aceitar cadastro capenga.
   const valido =
+    nascimentoISO() !== null &&
     nome.trim().length >= 2 &&
     cpfValido(cpf) &&
     paraE164(telefone) !== null &&
@@ -101,7 +98,7 @@ export default function Cadastro() {
       // divergiam — foi o bug de v0.206.1, do outro lado da mesma fronteira.
       telefone: paraE164(telefone) ?? telefone,
       senha,
-      ...(nascimentoISO() ? { data_nascimento: nascimentoISO()! } : {}),
+      data_nascimento: nascimentoISO()!,
       ...(termo?.disponivel && termo.termo
         ? {
             termo_versao_id: termo.termo.id,
@@ -263,7 +260,11 @@ export default function Cadastro() {
             onChange={(v) => setNascimento(mascaraData(v))}
             placeholder="DD/MM/AAAA"
             keyboardType="number-pad"
-            ajuda="Se você já é cliente, isso libera seu acesso na hora."
+            ajuda={
+              nascimento.replace(/\D/g, '').length === 8 && nascimentoISO() === null
+                ? 'Data inválida. Confira o dia, o mês e o ano.'
+                : 'Se você já é cliente, isso libera seu acesso na hora.'
+            }
             maxLength={10}
           />
           <Campo
