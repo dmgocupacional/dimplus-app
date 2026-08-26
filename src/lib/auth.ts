@@ -44,11 +44,40 @@ export const SENHA_MAX = 72;
 export type Resultado = { ok: true; mensagem?: string } | { ok: false; erro: string };
 
 // ─── Cadastro ───────────────────────────────────────────────────────────────
+// ═══ TERMO DO AUTO-CADASTRO ═══
+// 26/08/2026. O termo aparece ANTES de enviar a solicitação. Isso só é possível porque o
+// auto-cadastro é SEMPRE DIM+ Básico Plus — o plano é conhecido aqui, então o texto carrega
+// preço, fidelidade e multa. Rota pública: nesse momento ainda não existe sessão.
+export type TermoCadastro = {
+  disponivel: boolean;
+  termo?: { id: string; versao: string; texto: string };
+  plano?: { nome: string; valor_mensal: number; valor_adesao: number; limite_dependentes: number };
+};
+
+export async function buscarTermoCadastro(): Promise<TermoCadastro | null> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/app-termo-cadastro`);
+    if (!resp.ok) return null;
+    return (await resp.json()) as TermoCadastro;
+  } catch {
+    // null = desconhecido. NÃO devolver `{disponivel:false}`: falha de rede viraria "não há
+    // termo" e a tela deixaria a pessoa se cadastrar sem aceitar nada.
+    return null;
+  }
+}
+
 export async function solicitarCadastro(dados: {
   cpf: string;
   telefone: string;
   nome: string;
   senha: string;
+  // 26/08 — prova de identidade do pré-cadastrado. Batendo com o cadastro, entra sem fila.
+  data_nascimento?: string;
+  // Aceite capturado nesta tela, junto com vencimento e forma.
+  termo_versao_id?: string;
+  aceite?: boolean;
+  dia_vencimento?: 10 | 20 | 30;
+  forma_pagamento?: 'BOLETO' | 'PIX' | 'CREDIT_CARD';
 }): Promise<Resultado> {
   try {
     const resp = await fetch(`${API_BASE}/api/public/app-cadastro`, {

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
+import { useSession } from '@/state/session';
 import {
   aceitarTermo,
   buscarTermoPendente,
@@ -39,6 +40,7 @@ function brl(v: number): string {
 }
 
 export default function AceiteTermo() {
+  const { recarregarAceite } = useSession();
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [dados, setDados] = useState<TermoPendente | null>(null);
@@ -78,6 +80,8 @@ export default function AceiteTermo() {
         : r.cobranca === 'assinatura'
           ? `Adesão confirmada. A primeira cobrança vence no dia ${dia}.`
           : (r.aviso ?? 'Adesão confirmada. A cobrança será gerada pela nossa equipe.');
+    // Libera o gate ANTES de navegar: sem isto o Roteador devolveria a pessoa para cá.
+    recarregarAceite();
     Alert.alert('Tudo certo', msg, [{ text: 'Continuar', onPress: () => router.replace('/') }]);
   }
 

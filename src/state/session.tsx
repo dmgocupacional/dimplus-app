@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 
 import { getCliente, getFaturas, getModulos, getRede } from '@/lib/data';
+import { buscarTermoPendente } from '@/lib/contrato';
 import { isAdimplente, podeAcessar } from '@/lib/gate';
 import type { MotivoBloqueio } from '@/lib/gate';
 import { sair as authSair } from '@/lib/auth';
@@ -38,6 +39,9 @@ type SessionValue = {
   rede: Parceiro[];
   adimplente: boolean;
   acesso: AppAcesso;
+  /** true = há termo publicado esperando aceite. null = ainda não se sabe (não bloqueia). */
+  aceitePendente: boolean | null;
+  recarregarAceite: () => void;
   pode: (key: ModuloKey) => Veredito;
   modulo: (key: ModuloKey) => Modulo | undefined;
   recarregar: () => Promise<void>;
@@ -104,6 +108,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const adimplente = useMemo(() => isAdimplente(faturas), [faturas]);
   const acesso: AppAcesso = cliente?.app_acesso ?? 'bloqueado';
 
+  // ═══ ACEITE PENDENTE ═══
+  // 26/08/2026. Pré-cadastrado (SUEESSOR, Sagrado, Dimeg) aceita o termo DEPOIS do login,
+  // porque o plano dele já estava definido antes de ele existir no app.
+  //
+  // 🔴 ESTE ESTADO É A PEÇA QUE FALTAVA. A tela `aceite-termo` foi construída em 26/08 e não
+  // era alcançável por rota nenhuma: existia e nunca aparecia. É este flag que o Roteador usa.
+  //
+  // ⚠️ `null` (desconhecido) NÃO bloqueia. Falha de rede viraria app travado numa tela de
+  // aceite que não carrega — e o beneficiário ficaria sem acesso ao próprio exame por causa
+  // de um 500. Bloquear só quando o servidor CONFIRMOU que há termo pendente.
+  const [aceitePendente, setAceitePendente] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Só pergunta quando existe cliente: sem vínculo o RLS não devolveria contrato nenhum e a
+    // chamada seria ruído. `estado` na dependência refaz a checagem após o login.
+    if (estado !== 'pronto') return;
+    let vivo = true;
+    void (async () => {
+      const r = await buscarTermoPendente();
+      if (!vivo) return;
+      // r === null é falha de rede → deixa null → não bloqueia. Ver o comentário acima.
+      setAceitePendente(r === null ? null : r.pendente);
+    })();
+    return () => { vivo = false; };
+  }, [estado, cliente?.id]);
+
   const modulo = useCallback((key: ModuloKey) => modulos.find((m) => m.key === key), [modulos]);
 
   const pode = useCallback(
@@ -123,6 +153,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value: SessionValue = {
     estado,
+    aceitePendente,
+    recarregarAceite: () => setAceitePendente(false),
     carregando: estado === 'carregando',
     cliente,
     modulos,

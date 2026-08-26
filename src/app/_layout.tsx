@@ -43,7 +43,7 @@ function Splash() {
 }
 
 function Roteador() {
-  const { estado } = useSession();
+  const { estado, aceitePendente } = useSession();
   const segments = useSegments();
   const router = useRouter();
 
@@ -70,9 +70,25 @@ function Roteador() {
       return;
     }
 
+    // ═══ ACEITE PENDENTE — bloqueia o app ═══
+    // 26/08/2026. Esta é a peça que faltava: a tela `aceite-termo` existia desde o lote das
+    // 14h e NÃO era alcançável por rota nenhuma, então nunca aparecia para ninguém.
+    //
+    // 🔴 Vem ANTES do redirecionamento de "pronto". Quem tem termo pendente não usa o app:
+    // agendar consulta com desconto sem ter aceitado as condições do plano é usar benefício
+    // sob regra que a pessoa não concordou.
+    //
+    // ⚠️ Só bloqueia com `true` explícito. `null` é "ainda não sei" (inclusive falha de rede)
+    // e deixa passar — travar o beneficiário fora do próprio exame por causa de um 500 seria
+    // pior do que o atraso no aceite.
+    if (aceitePendente === true) {
+      if (partes[0] !== 'aceite-termo') router.replace('/aceite-termo' as never);
+      return;
+    }
+
     // pronto
     if (emAuth) router.replace('/' as never);
-  }, [estado, segments, router]);
+  }, [estado, aceitePendente, segments, router]);
 
   if (estado === 'carregando') return <Splash />;
 
