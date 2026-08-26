@@ -66,6 +66,28 @@ export async function buscarTermoCadastro(): Promise<TermoCadastro | null> {
   }
 }
 
+// ═══ CONSULTA DE CEP ═══
+// 26/08/2026. Passa pelo erp e não direto no ViaCEP: o app é binário congelado na loja, e
+// trocar de provedor exigiria nova submissão. O servidor já cai para o BrasilAPI sozinho.
+export type EnderecoCEP = {
+  encontrado: boolean;
+  logradouro?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+};
+
+export async function consultarCEP(cep: string): Promise<EnderecoCEP> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/cep?cep=${cep.replace(/\D/g, '')}`);
+    if (!resp.ok) return { encontrado: false };
+    return (await resp.json()) as EnderecoCEP;
+  } catch {
+    // Rede fora: a tela deixa preencher na mão. CEP não pode travar uma adesão.
+    return { encontrado: false };
+  }
+}
+
 export async function solicitarCadastro(dados: {
   cpf: string;
   telefone: string;
@@ -78,6 +100,14 @@ export async function solicitarCadastro(dados: {
   aceite?: boolean;
   dia_vencimento?: 10 | 20 | 30;
   forma_pagamento?: 'BOLETO' | 'PIX' | 'CREDIT_CARD';
+  // Endereço obrigatório: o Asaas exige CEP e número para cobrar no cartão.
+  endereco_cep: string;
+  endereco_numero: string;
+  endereco_logradouro: string;
+  endereco_bairro: string;
+  endereco_cidade: string;
+  endereco_uf: string;
+  endereco_complemento?: string;
 }): Promise<Resultado> {
   try {
     const resp = await fetch(`${API_BASE}/api/public/app-cadastro`, {

@@ -29,10 +29,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Campo } from '@/components/Campo';
 import {
-  SENHA_MAX, SENHA_MIN, buscarTermoCadastro, cpfValido, paraE164, solicitarCadastro,
-  type TermoCadastro,
+  SENHA_MAX, SENHA_MIN, buscarTermoCadastro, consultarCEP, cpfValido, paraE164,
+  solicitarCadastro, type TermoCadastro,
 } from '@/lib/auth';
-import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
+import { dataParaISO, mascaraCEP, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 const FORMAS = [
@@ -53,7 +53,9 @@ export default function Cadastro() {
   //
   // 🔴 O botão do passo 2 só libera depois de rolar o termo até o fim — o texto tem multa de
   // 30%, e o aceite precisa provar que a pessoa teve o texto diante dos olhos.
-  const [passo, setPasso] = useState<1 | 2>(1);
+  // 3 passos: dados → endereço → termo. O endereço virou obrigatório porque o Asaas exige
+  // CEP e número para cobrar no cartão, e o cadastro já deixa escolher cartão.
+  const [passo, setPasso] = useState<1 | 2 | 3>(1);
   const [termo, setTermo] = useState<TermoCadastro | null>(null);
   const [leuAteOFim, setLeuAteOFim] = useState(false);
   const [dia, setDia] = useState<10 | 20 | 30>(10);
@@ -62,6 +64,15 @@ export default function Cadastro() {
   // Prova de identidade do pré-cadastrado. Batendo com o cadastro, entra sem fila. Opcional:
   // quem não souber ou não quiser informar cai na aprovação manual, como antes.
   const [nascimento, setNascimento] = useState('');
+  const [cep, setCep] = useState('');
+  const [logradouro, setLogradouro] = useState('');
+  const [numero, setNumero] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [uf, setUf] = useState('');
+  const [complemento, setComplemento] = useState('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [cepNaoAchado, setCepNaoAchado] = useState(false);
   const [cpf, setCpf] = useState('');
   const [telefone, setTelefone] = useState('');
   const [senha, setSenha] = useState('');
@@ -72,6 +83,39 @@ export default function Cadastro() {
   useEffect(() => {
     void (async () => setTermo(await buscarTermoCadastro()))();
   }, []);
+
+  // Busca ao completar os 8 dígitos. NÃO trava nada: se não achar, os campos ficam
+  // editáveis e a pessoa preenche na mão — serviço externo fora do ar não pode impedir
+  // uma adesão.
+  useEffect(() => {
+    const d = cep.replace(/\D/g, '');
+    if (d.length !== 8) { setCepNaoAchado(false); return; }
+    let vivo = true;
+    void (async () => {
+      setBuscandoCep(true);
+      const r = await consultarCEP(d);
+      if (!vivo) return;
+      setBuscandoCep(false);
+      setCepNaoAchado(!r.encontrado);
+      if (r.encontrado) {
+        // Só preenche o que veio: CEP de logradouro único não traz rua, e sobrescrever com
+        // vazio apagaria o que a pessoa já digitou.
+        if (r.logradouro) setLogradouro(r.logradouro);
+        if (r.bairro) setBairro(r.bairro);
+        if (r.cidade) setCidade(r.cidade);
+        if (r.uf) setUf(r.uf);
+      }
+    })();
+    return () => { vivo = false; };
+  }, [cep]);
+
+  const enderecoOk =
+    cep.replace(/\D/g, '').length === 8 &&
+    numero.trim().length >= 1 &&
+    logradouro.trim().length >= 2 &&
+    bairro.trim().length >= 2 &&
+    cidade.trim().length >= 2 &&
+    uf.trim().length === 2;
 
   // Data real, não só formato. Ver dataParaISO: 31/02 e datas futuras são recusadas.
   const nascimentoISO = useCallback(() => dataParaISO(nascimento), [nascimento]);
@@ -99,6 +143,13 @@ export default function Cadastro() {
       telefone: paraE164(telefone) ?? telefone,
       senha,
       data_nascimento: nascimentoISO()!,
+      endereco_cep: cep.replace(/\D/g, ''),
+      endereco_numero: numero.trim(),
+      endereco_logradouro: logradouro.trim(),
+      endereco_bairro: bairro.trim(),
+      endereco_cidade: cidade.trim(),
+      endereco_uf: uf.trim().toUpperCase(),
+      ...(complemento.trim() ? { endereco_complemento: complemento.trim() } : {}),
       ...(termo?.disponivel && termo.termo
         ? {
             termo_versao_id: termo.termo.id,
@@ -133,12 +184,85 @@ export default function Cadastro() {
     );
   }
 
-  // ═══ PASSO 2 — TERMO, VENCIMENTO E FORMA ═══
-  if (passo === 2 && termo?.termo) {
+  // ═══ PASSO 2 — ENDEREÇO ═══
+  // 🔴 Obrigatório porque o Asaas exige postalCode e addressNumber em creditCardHolderInfo,
+  // e o passo seguinte deixa escolher CARTÃO. Sem isso a cobrança falha DEPOIS de já existir
+  // cliente, contrato e aceite — 231 dos 571 ativos estão hoje nessa situação.
+  if (passo === 2) {
+    return (
+      <KeyboardAvoidingView style={s.tela} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={[s.conteudo, { paddingTop: insets.top + space.xl }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable onPress={() => setPasso(1)} hitSlop={12} style={s.voltar}>
+            <Ionicons name="chevron-back" size={22} color={color.ink2} />
+            <Text style={s.voltarTxt}>Voltar</Text>
+          </Pressable>
+
+          <Text style={s.titulo}>Seu endereço</Text>
+          <Text style={s.sub}>Precisamos dele para emitir suas cobranças.</Text>
+
+          <View style={s.form}>
+            <Campo
+              rotulo="CEP"
+              valor={cep}
+              onChange={(v) => setCep(mascaraCEP(v))}
+              placeholder="00000-000"
+              keyboardType="number-pad"
+              ajuda={
+                buscandoCep ? 'Buscando endereço…'
+                  : cepNaoAchado ? 'Não encontramos esse CEP. Preencha os campos abaixo.'
+                  : 'Preenchemos o resto para você.'
+              }
+              maxLength={9}
+            />
+            <Campo rotulo="Rua" valor={logradouro} onChange={setLogradouro}
+              placeholder="nome da rua" autoCapitalize="words" maxLength={160} />
+            <Campo rotulo="Número" valor={numero} onChange={setNumero}
+              placeholder="123" keyboardType="number-pad" maxLength={20} />
+            <Campo rotulo="Complemento (opcional)" valor={complemento} onChange={setComplemento}
+              placeholder="apto, bloco…" maxLength={80} />
+            <Campo rotulo="Bairro" valor={bairro} onChange={setBairro}
+              placeholder="bairro" autoCapitalize="words" maxLength={100} />
+            <Campo rotulo="Cidade" valor={cidade} onChange={setCidade}
+              placeholder="cidade" autoCapitalize="words" maxLength={100} />
+            <Campo rotulo="UF" valor={uf} onChange={(v) => setUf(v.toUpperCase().slice(0, 2))}
+              placeholder="SP" autoCapitalize="characters" maxLength={2} />
+
+            {erro ? <Text style={s.erro}>{erro}</Text> : null}
+
+            <Pressable
+              onPress={() => {
+                // Sem termo publicado (ou sem rede para buscá-lo) envia direto e cai na fila.
+                // Travar aqui deixaria a pessoa sem caminho por uma falha que não é dela.
+                if (termo?.disponivel && termo.termo) setPasso(3);
+                else void onEnviar();
+              }}
+              disabled={!enderecoOk || enviando}
+              style={({ pressed }) => [
+                s.botao,
+                (!enderecoOk || enviando) && s.botaoOff,
+                pressed && enderecoOk && !enviando && s.botaoPress,
+              ]}
+              accessibilityRole="button"
+            >
+              {enviando ? <ActivityIndicator color={color.navy} />
+                : <Text style={s.botaoTxt}>{termo?.disponivel ? 'Continuar' : 'Enviar solicitação'}</Text>}
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ═══ PASSO 3 — TERMO, VENCIMENTO E FORMA ═══
+  if (passo === 3 && termo?.termo) {
     const pl = termo.plano;
     return (
       <View style={[s.tela, { paddingTop: insets.top + space.xl, paddingHorizontal: space.xl }]}>
-        <Pressable onPress={() => setPasso(1)} hitSlop={12} style={s.voltar}>
+        <Pressable onPress={() => setPasso(2)} hitSlop={12} style={s.voltar}>
           <Ionicons name="chevron-back" size={22} color={color.ink2} />
           <Text style={s.voltarTxt}>Voltar</Text>
         </Pressable>
@@ -280,13 +404,7 @@ export default function Cadastro() {
           {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
           <Pressable
-            onPress={() => {
-              // Sem termo publicado (ou sem rede para buscá-lo) o cadastro segue como antes,
-              // direto para a fila. Travar aqui deixaria a pessoa sem caminho nenhum por uma
-              // falha que não é dela.
-              if (termo?.disponivel && termo.termo) setPasso(2);
-              else void onEnviar();
-            }}
+            onPress={() => setPasso(2)}
             disabled={!valido || enviando}
             style={({ pressed }) => [
               s.botao,
@@ -299,9 +417,7 @@ export default function Cadastro() {
             {enviando ? (
               <ActivityIndicator color={color.navy} />
             ) : (
-              <Text style={s.botaoTxt}>
-                {termo?.disponivel ? 'Continuar' : 'Enviar solicitação'}
-              </Text>
+              <Text style={s.botaoTxt}>Continuar</Text>
             )}
           </Pressable>
         </View>

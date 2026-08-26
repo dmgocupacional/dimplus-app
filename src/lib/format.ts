@@ -48,6 +48,13 @@ export function mascaraTelefone(v: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, corte)}-${d.slice(corte)}`;
 }
 
+/** 00000-000, parcial. */
+export function mascaraCEP(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
 /** DD/MM/AAAA, parcial. */
 export function mascaraData(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 8);
