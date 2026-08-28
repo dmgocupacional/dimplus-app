@@ -110,3 +110,21 @@ não move esse número), telemedicina (flag `false`), visão gestor (permissão,
 - ✅ Flags `agendamento` e `exames` = `ativo=true`, não revertidas
 - ✅ Conta de teste válida (`app_acesso='liberado'`, `user_id` presente)
 - ❌ Backfill dos 256 sem nascimento — **não rodou**; 46/46 dependentes seguem sem data
+
+## Preview web na Vercel (28/08/2026)
+
+Existe uma versão do app rodando no navegador, para demonstrar sem instalar nada:
+**https://dimplus-web.vercel.app** — projeto Vercel `dimplus-web`, conectado a este repo,
+branch `main`. **Push na `main` publica sozinho.**
+
+Habilitado por `erp-dimplus` v0.278.0, que liberou CORS em `/api/public/app-login` para
+essa origem — allowlist de uma origem só, nunca `*`.
+
+**Limites:** serve para aprovar visual e navegar. NÃO serve para validar comportamento —
+storage do Supabase no web é em memória (sessão não persiste) e componentes nativos
+renderizam aproximado.
+
+**Aberto:** `app-cadastro`, `app-termo-cadastro` e `cep` seguem sem CORS — o fluxo de
+cadastro quebra no preview web.
+
+Detalhes e pegadinhas: `docs/sessions/2026-08-28-preview-web-vercel.md`.
