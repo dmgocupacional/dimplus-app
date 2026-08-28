@@ -1,0 +1,22 @@
+# ═══ WORKFLOW: PUBLICAR UPDATE ═══
+# 28/08/2026. Publica um EAS Update sem depender de terminal local.
+#
+# 🔴 POR QUE ESTE ARQUIVO EXISTE: o `eas update` normalmente roda na máquina do dev. O
+# Henrique não tem o repo clonado — todo o trabalho acontece pelo Claude. Workflows rodam na
+# infra do EAS e podem ser disparados remotamente, então este é o caminho que não exige
+# terminal dele.
+#
+# ⚠️ Diferente de `eas build`: update NÃO precisa de credencial da Apple. Ele publica só o
+# bundle JavaScript, e é por isso que funciona mesmo com o certificado de distribuição ainda
+# não configurado.
+name: Publicar update
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    name: Publicar no canal production
+    type: update
+    params:
+      channel: production
