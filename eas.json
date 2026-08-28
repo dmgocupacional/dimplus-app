@@ -1,12 +1,27 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     },
-    "production": { "channel": "production", "autoIncrement": true }
+    "production": {
+      "channel": "production",
+      "autoIncrement": true
+    }
   },
-  "submit": { "production": {} }
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "dimmsaude@gmail.com",
+        "ascAppId": "6749953259"
+      }
+    }
+  }
 }

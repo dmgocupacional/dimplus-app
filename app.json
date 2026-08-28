@@ -2,13 +2,13 @@
   "expo": {
     "name": "DIM+ Saúde",
     "slug": "dimplus",
-    "version": "0.20.0",
+    "version": "3.1.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "scheme": "dimplus",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "br.com.dimmaissaude.app",
+      "package": "com.javenessi.dimmaissaude",
       "adaptiveIcon": {
         "backgroundColor": "#202745",
         "foregroundImage": "./assets/brand/icon-adaptive.png"
@@ -34,8 +34,12 @@
       "typedRoutes": true
     },
     "ios": {
-      "bundleIdentifier": "br.com.dimmaissaude.app",
-      "supportsTablet": false
+      "bundleIdentifier": "com.javenessi.dimmaissaude",
+      "supportsTablet": false,
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "extra": {
       "eas": {
