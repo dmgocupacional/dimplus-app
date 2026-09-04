@@ -3,14 +3,18 @@ name: Publicar no Expo Go
 # Todo push na main republica o app. O Henrique abre o Expo Go no celular e o
 # update novo já está lá — sem máquina local, sem build de 15 minutos.
 #
-# Runtime: exposdk:54.0.0 (definido por runtimeVersion.policy = "sdkVersion" no
+# Runtime: exposdk:57.0.0 (definido por runtimeVersion.policy = "sdkVersion" no
 # app.json, resolvido a partir da versão do pacote `expo` em package.json).
+# Era exposdk:54.0.0 até 04/09/2026, quando o app subiu para o SDK 57 — o Expo Go
+# da App Store só carrega o SDK corrente, e no 54 o projeto tinha sumido da aba
+# Projects do celular.
 #
-# ⚠️ ESTE COMENTÁRIO JÁ ESTEVE ERRADO. Até 17/08/2026 dizia "exposdk:57.0.0", e isso
+# ⚠️ ESTE COMENTÁRIO JÁ ESTEVE ERRADO ANTES. Até 17/08/2026 dizia "exposdk:57.0.0"
+# quando o runtime real era 54, e isso
 # custou um diagnóstico inteiro: o celular apareceu rodando um bundle de julho, e a
 # hipótese de incompatibilidade de runtime pareceu plausível POR CAUSA DESTE COMENTÁRIO.
-# Verificado via `eas branch:list`: todos os updates estão em exposdk:54.0.0, coerentes.
-# A causa real era CACHE do Expo Go — matar e reabrir o app resolve.
+# (Naquela ocasião, `eas branch:list` mostrou todos os updates em exposdk:54.0.0,
+# coerentes entre si — a causa real era CACHE do Expo Go, matar e reabrir resolve.)
 # Se conferir de novo: `export EXPO_TOKEN=... && npx eas-cli@latest branch:list`.
 #
 # Se um dia alguém trocar a policy para "appVersion", o Expo Go PARA de abrir o projeto —
