@@ -78,6 +78,12 @@ export default function HistoricoAgendamentos() {
     const esps = rOpcoes.ok ? new Map(rOpcoes.dados.especialidades.map((e) => [e.id, e.nome])) : null;
     const comNomes = r.dados.map((a) => {
       const prof = a.profissionalId !== null ? profs?.get(a.profissionalId) : undefined;
+      // Fonte certa: especialidade DESTE agendamento, não a primeira do profissional
+      // (bug documentado — Cardiologia exibida numa consulta de Geriatria).
+      // Extraída para const: inline dentro da cadeia `??` o TS 6 emite TS2871
+      // ("always nullish") por falso positivo da análise de fluxo. Mesmo valor.
+      const espDoAgendamento =
+        a.especialidadeId !== null ? (esps?.get(a.especialidadeId) ?? null) : null;
       return {
         ...a,
         profissionalNome:
@@ -85,9 +91,7 @@ export default function HistoricoAgendamentos() {
           (prof ? (prof.tratamento ? `${prof.tratamento} ${prof.nome}` : prof.nome) : null),
         especialidadeNome:
           a.especialidadeNome ??
-          // Fonte certa: especialidade DESTE agendamento, não a primeira do profissional
-          // (bug documentado — Cardiologia exibida numa consulta de Geriatria).
-          (a.especialidadeId !== null ? (esps?.get(a.especialidadeId) ?? null) : null) ??
+          espDoAgendamento ??
           (prof?.especialidadeIds.length ? (esps?.get(prof.especialidadeIds[0]) ?? null) : null),
       };
     });
