@@ -19,6 +19,24 @@
 | Dependentes (titular ↔ dependente) | `docs/ROADMAP-DEPENDENTES.md` neste repo |
 | Ordem geral das frentes do ERP | `erp-dimplus/docs/PLANO-MESTRE.md` |
 
+## 📍 Estado do app — 04/09/2026 · v4.0.0 · SDK 57
+
+- **SDK 54 → 57** (RN 0.86.3, React 19.2.3). O Expo Go da App Store atualizou sozinho para a 57
+  e o projeto na 54 **sumiu da aba Projects, sem erro**. Handoff:
+  `docs/sessions/2026-09-04-sdk-54-para-57.md`.
+- 🔴 **O teto é o Expo Go instalado, e ele SE MOVE.** A doc antiga dizia que era limite de iOS do
+  aparelho — está errado, e o erro custou meia sessão. A Expo não distribui Expo Go antigo, então
+  não dá para "voltar" o cliente: o SDK do projeto tem que acompanhar. Argumento estrutural a
+  favor de **development build** em vez de Expo Go.
+- 🔴 **Runtime publicado mudou** para `exposdk:57.0.0`. Quem tiver o app com runtime 54 para de
+  receber updates até reinstalar.
+- ⚠️ **SDK 56 subiu o mínimo do iOS para 16.4** — sai iPhone 7, 6s, SE 1ª geração, iPads antigos.
+- 📦 **Próxima frente: publicar na App Store.** Bloqueada pela credencial da Apple (2FA). Ver
+  `erp-dimplus/docs/ROADMAP-APP.md` → §PUBLICAÇÃO NAS LOJAS e o prompt de retomada em
+  `erp-dimplus/docs/sessions/2026-09-04-PROMPT-RETOMADA.md`.
+- ⚠️ **O run do GitHub Actions de 01/09 falhou em silêncio** e o canal `preview` ficou 3 dias
+  parado. Não investigado.
+
 ## Resumo da fila do S2 — S2 FECHADO em 21/08/2026
 
 1. ✅ **S2-L1 — helper HTTP autenticado.** (`b9e71c0`, v0.5.2) `chamarFeegow()` em
