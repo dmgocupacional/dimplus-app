@@ -31,6 +31,7 @@ import { Campo } from '@/components/Campo';
 import {
   SENHA_MAX, SENHA_MIN, buscarTermoCadastro, consultarCEP, cpfValido, paraE164,
   solicitarCadastro, type TermoCadastro,
+  emailValido,
 } from '@/lib/auth';
 import { dataParaISO, mascaraCEP, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
@@ -76,6 +77,9 @@ export default function Cadastro() {
   const [cpf, setCpf] = useState('');
   const [telefone, setTelefone] = useState('');
   const [senha, setSenha] = useState('');
+  // 10/09/2026 — e-mail REAL. É o canal do link de "esqueci minha senha"; sem ele a pessoa
+  // depende da equipe para recuperar acesso. → BLOCO: TELA — RECUPERAR ACESSO
+  const [email, setEmail] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState<string | null>(null);
@@ -129,7 +133,10 @@ export default function Cadastro() {
     cpfValido(cpf) &&
     paraE164(telefone) !== null &&
     senha.length >= SENHA_MIN &&
-    senha.length <= SENHA_MAX;
+    senha.length <= SENHA_MAX &&
+    // Opcional: vazio passa. Preenchido, tem que ter forma de e-mail — a rota valida com Zod
+    // e devolveria 400 genérico ("Confira os dados informados"), sem dizer qual campo.
+    (email.trim() === '' || emailValido(email));
 
   async function onEnviar() {
     setErro(null);
@@ -142,6 +149,9 @@ export default function Cadastro() {
       // divergiam — foi o bug de v0.206.1, do outro lado da mesma fronteira.
       telefone: paraE164(telefone) ?? telefone,
       senha,
+      // `undefined` quando vazio, nunca string vazia: '' falharia o z.string().email() da rota
+      // e derrubaria o cadastro inteiro com 400, por um campo que é opcional.
+      email: email.trim() === '' ? undefined : email.trim().toLowerCase(),
       data_nascimento: nascimentoISO()!,
       endereco_cep: cep.replace(/\D/g, ''),
       endereco_numero: numero.trim(),
@@ -377,6 +387,20 @@ export default function Cadastro() {
             keyboardType="phone-pad"
             ajuda="Usamos para falar com você sobre o seu plano."
             maxLength={16}
+          />
+          <Campo
+            rotulo="E-mail"
+            valor={email}
+            onChange={setEmail}
+            placeholder="voce@email.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            ajuda={
+              email.trim() !== '' && !emailValido(email)
+                ? 'E-mail inválido. Confira o endereço.'
+                : 'É por aqui que você recupera a senha se esquecer.'
+            }
+            maxLength={160}
           />
           <Campo
             rotulo="Data de nascimento"

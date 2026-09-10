@@ -113,13 +113,19 @@ export default function Login() {
             </Text>
           </Pressable>
 
-          {/* Reset de senha não tem caminho automático enquanto não houver canal de mensagem
-              (WhatsApp/SMS). Prometer "esqueci minha senha" e cair num formulário que só
-              gera fila seria pior que dizer a verdade. Dívida datada no ROADMAP-APP. */}
-          <Text style={s.rodape}>
-            Esqueceu a senha? Fale com a central pelo telefone da sua unidade — por enquanto a
-            troca é feita pela nossa equipe.
-          </Text>
+          {/* 10/09/2026 — a dívida foi paga. O rodapé antes dizia para ligar para a central,
+              porque não havia canal de mensagem. Agora o canal é E-MAIL (Resend), e o WhatsApp
+              entra depois como segundo transporte sem mexer nesta tela.
+              → BLOCO: TELA — RECUPERAR ACESSO */}
+          <Pressable
+            onPress={() => router.push('/recuperar' as never)}
+            style={s.link}
+            accessibilityRole="button"
+          >
+            <Text style={s.linkTxt}>
+              <Text style={s.linkForte}>Esqueci minha senha</Text>
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

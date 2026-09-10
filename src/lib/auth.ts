@@ -37,6 +37,16 @@ export function cpfValido(v: string): boolean {
   return v.replace(/\D/g, '').length === 11;
 }
 
+/**
+ * Forma de e-mail, não existência. Deliberadamente FROUXO: a validação que vale é a do Zod na
+ * rota, e uma regex apertada aqui recusaria endereços válidos (TLD longo, `+` no local part)
+ * antes mesmo de o servidor ver. Serve só para não gastar uma ida ao servidor com typo óbvio.
+ */
+export function emailValido(v: string): boolean {
+  const t = v.trim();
+  return t.length >= 5 && t.length <= 160 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(t);
+}
+
 /** Mínimo 8; teto 72 porque acima disso o bcrypt do Supabase trunca em silêncio. */
 export const SENHA_MIN = 8;
 export const SENHA_MAX = 72;
@@ -93,6 +103,10 @@ export async function solicitarCadastro(dados: {
   telefone: string;
   nome: string;
   senha: string;
+  // 10/09/2026 — e-mail REAL, canal do link de recuperação de senha. Opcional aqui porque é
+  // opcional na rota; o ERP grava em `clientes.email` e nunca sobrescreve o de um cadastro
+  // que já existia. Sem ele a pessoa depende da equipe para recuperar acesso.
+  email?: string;
   // 26/08 — prova de identidade do pré-cadastrado. Batendo com o cadastro, entra sem fila.
   data_nascimento?: string;
   // Aceite capturado nesta tela, junto com vencimento e forma.
@@ -114,6 +128,28 @@ export async function solicitarCadastro(dados: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...dados, website: '' }), // honeypot vazio: somos humanos
+    });
+    const json = (await resp.json()) as { ok?: boolean; mensagem?: string; error?: string };
+    if (!resp.ok) return { ok: false, erro: json.error ?? 'Não foi possível enviar agora.' };
+    return { ok: true, mensagem: json.mensagem };
+  } catch {
+    return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
+  }
+}
+
+// ─── Recuperação de acesso ──────────────────────────────────────────────────
+// 10/09/2026. Substitui a dívida datada: até aqui não havia "esqueci minha senha" e a troca
+// era feita à mão pela equipe.
+//
+// 🔒 A RESPOSTA DO ERP É NEUTRA e esta função NÃO tenta melhorá-la. Ela devolve a mesma
+// mensagem havendo conta ou não, tendo e-mail cadastrado ou não. Distinguir os casos daria ao
+// app um oráculo de quem é cliente da DIM+ — o mesmo que o cadastro e o login evitam.
+export async function recuperarAcesso(cpf: string): Promise<Resultado> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/app-recuperar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cpf }),
     });
     const json = (await resp.json()) as { ok?: boolean; mensagem?: string; error?: string };
     if (!resp.ok) return { ok: false, erro: json.error ?? 'Não foi possível enviar agora.' };
