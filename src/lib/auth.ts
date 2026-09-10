@@ -144,12 +144,20 @@ export async function solicitarCadastro(dados: {
 // 🔒 A RESPOSTA DO ERP É NEUTRA e esta função NÃO tenta melhorá-la. Ela devolve a mesma
 // mensagem havendo conta ou não, tendo e-mail cadastrado ou não. Distinguir os casos daria ao
 // app um oráculo de quem é cliente da DIM+ — o mesmo que o cadastro e o login evitam.
-export async function recuperarAcesso(cpf: string): Promise<Resultado> {
+export async function recuperarAcesso(dados: {
+  cpf: string;
+  // 10/09/2026 — os três servem SÓ a quem ainda não tem e-mail cadastrado. Quem já tem canal
+  // recebe no e-mail antigo e estes campos são IGNORADOS pelo servidor: e-mail de quem já tem
+  // nunca é trocado por esta rota, senão bastaria saber um CPF para sequestrar a conta.
+  email?: string;
+  data_nascimento?: string;
+  telefone?: string;
+}): Promise<Resultado> {
   try {
     const resp = await fetch(`${API_BASE}/api/public/app-recuperar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cpf }),
+      body: JSON.stringify(dados),
     });
     const json = (await resp.json()) as { ok?: boolean; mensagem?: string; error?: string };
     if (!resp.ok) return { ok: false, erro: json.error ?? 'Não foi possível enviar agora.' };

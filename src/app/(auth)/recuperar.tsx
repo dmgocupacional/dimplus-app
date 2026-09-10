@@ -32,23 +32,44 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Campo } from '@/components/Campo';
-import { cpfValido, recuperarAcesso } from '@/lib/auth';
-import { mascaraCPF } from '@/lib/format';
+import { cpfValido, emailValido, recuperarAcesso } from '@/lib/auth';
+import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 export default function Recuperar() {
   const insets = useSafeAreaInsets();
   const [cpf, setCpf] = useState('');
+  // 10/09/2026 — bloco "não tenho e-mail cadastrado". Fica RECOLHIDO por padrão: a maioria
+  // de quem entra aqui só precisa do CPF, e três campos a mais na cara aumentam desistência.
+  const [semEmail, setSemEmail] = useState(false);
+  const [email, setEmail] = useState('');
+  const [nascimento, setNascimento] = useState('');
+  const [telefone, setTelefone] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState<string | null>(null);
 
-  const podeEnviar = cpfValido(cpf) && !enviando;
+  // Com o bloco aberto, os TRÊS campos são exigidos juntos. Enviar só o e-mail não adianta —
+  // o servidor descarta sem a segunda prova — e deixar a pessoa mandar assim produziria a
+  // mesma mensagem de sucesso sem que nada acontecesse, que é a pior confusão possível.
+  const blocoOk =
+    !semEmail ||
+    (emailValido(email) && dataParaISO(nascimento) !== null && telefone.replace(/\D/g, '').length >= 10);
+  const podeEnviar = cpfValido(cpf) && blocoOk && !enviando;
 
   async function onEnviar() {
     setErro(null);
     setEnviando(true);
-    const r = await recuperarAcesso(cpf);
+    const r = await recuperarAcesso({
+      cpf,
+      ...(semEmail
+        ? {
+            email: email.trim().toLowerCase(),
+            data_nascimento: dataParaISO(nascimento) ?? undefined,
+            telefone,
+          }
+        : {}),
+    });
     setEnviando(false);
     if (r.ok) setEnviado(r.mensagem ?? 'Se houver uma conta com este CPF, enviamos o link.');
     else setErro(r.erro);
@@ -100,6 +121,51 @@ export default function Recuperar() {
                 keyboardType="number-pad"
                 maxLength={14}
               />
+
+              <Pressable
+                onPress={() => setSemEmail((v) => !v)}
+                style={s.toggle}
+                accessibilityRole="button"
+              >
+                <Text style={s.toggleTxt}>
+                  {semEmail ? '− ' : '+ '}
+                  Não tenho e-mail cadastrado
+                </Text>
+              </Pressable>
+
+              {semEmail ? (
+                <View>
+                  <Text style={s.ajuda}>
+                    Para cadastrar um e-mail agora, confirme seus dados. Enviaremos um link para
+                    o endereço informado.
+                  </Text>
+                  <Campo
+                    rotulo="E-mail"
+                    valor={email}
+                    onChange={setEmail}
+                    placeholder="voce@email.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    maxLength={160}
+                  />
+                  <Campo
+                    rotulo="Data de nascimento"
+                    valor={nascimento}
+                    onChange={(v) => setNascimento(mascaraData(v))}
+                    placeholder="DD/MM/AAAA"
+                    keyboardType="number-pad"
+                    maxLength={10}
+                  />
+                  <Campo
+                    rotulo="Telefone com DDD"
+                    valor={telefone}
+                    onChange={(v) => setTelefone(mascaraTelefone(v))}
+                    placeholder="(00) 00000-0000"
+                    keyboardType="phone-pad"
+                    maxLength={15}
+                  />
+                </View>
+              ) : null}
 
               {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
@@ -162,6 +228,15 @@ const s = StyleSheet.create({
     fontSize: size.base,
     color: color.ink,
     lineHeight: 22,
+  },
+  toggle: { marginTop: space.lg, marginBottom: space.sm },
+  toggleTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
+  ajuda: {
+    fontFamily: font.regular,
+    fontSize: size.sm,
+    color: color.ink2,
+    marginBottom: space.md,
+    lineHeight: 19,
   },
   erro: {
     fontFamily: font.medium,
