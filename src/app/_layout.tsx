@@ -58,8 +58,13 @@ function Roteador() {
 
     if (estado === 'deslogado') {
       // Cadastro é uma tela DE deslogado: quem está criando acesso não pode ser chutado de
-      // volta para o login a cada render.
-      if (!emAuth || (rota !== 'login' && rota !== 'cadastro')) {
+      // volta para o login a cada render. O mesmo vale para `recuperar` (10/09/2026): quem
+      // perdeu a senha está, por definição, deslogado — deixá-la fora desta lista fazia a tela
+      // abrir e voltar sozinha para o login, sem erro nenhum na tela.
+      //
+      // ⚠️ ESTA LISTA É FECHADA. Toda tela nova dentro de `(auth)` que deva ser alcançável sem
+      // sessão precisa ser adicionada AQUI — senão ela existe, compila, e é inalcançável.
+      if (!emAuth || (rota !== 'login' && rota !== 'cadastro' && rota !== 'recuperar')) {
         router.replace('/login' as never);
       }
       return;
