@@ -39,9 +39,14 @@ import { color, font, radius, size, space } from '@/theme/tokens';
 export default function Recuperar() {
   const insets = useSafeAreaInsets();
   const [cpf, setCpf] = useState('');
-  // 10/09/2026 — bloco "não tenho e-mail cadastrado". Fica RECOLHIDO por padrão: a maioria
-  // de quem entra aqui só precisa do CPF, e três campos a mais na cara aumentam desistência.
-  const [semEmail, setSemEmail] = useState(false);
+  // 11/09/2026 — o bloco "não tenho e-mail cadastrado" FOI REMOVIDO, e o motivo é de
+  // segurança, não de layout: ele revelava a bifurcação do servidor. Quem abrisse o bloco
+  // sabia que o outro caminho existia, e a tela passava a insinuar o que a resposta neutra
+  // esconde. Agora a tela pede SEMPRE a mesma coisa, exista conta ou não.
+  //
+  // 🔒 O E-MAIL É OBRIGATÓRIO PARA TODOS. Quem já tem canal passa a PROVAR que o conhece —
+  // antes bastava saber o CPF para disparar o link. É mais seguro que o desenho de ontem,
+  // não menos.
   const [email, setEmail] = useState('');
   const [nascimento, setNascimento] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -49,26 +54,26 @@ export default function Recuperar() {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState<string | null>(null);
 
-  // Com o bloco aberto, os TRÊS campos são exigidos juntos. Enviar só o e-mail não adianta —
-  // o servidor descarta sem a segunda prova — e deixar a pessoa mandar assim produziria a
-  // mesma mensagem de sucesso sem que nada acontecesse, que é a pior confusão possível.
-  const blocoOk =
-    !semEmail ||
-    (emailValido(email) && dataParaISO(nascimento) !== null && telefone.replace(/\D/g, '').length >= 10);
-  const podeEnviar = cpfValido(cpf) && blocoOk && !enviando;
+  // Nascimento e telefone são OPCIONAIS e servem só a quem nunca cadastrou e-mail. Quando um
+  // dos dois vem, o outro é exigido: o servidor descarta a segunda prova pela metade, e deixar
+  // enviar assim produziria a mensagem de sucesso sem que nada acontecesse — a pior confusão
+  // possível, porque a resposta neutra impede a tela de avisar.
+  const provaIniciada = nascimento.length > 0 || telefone.length > 0;
+  const provaOk =
+    !provaIniciada ||
+    (dataParaISO(nascimento) !== null && telefone.replace(/\D/g, '').length >= 10);
+  const podeEnviar = cpfValido(cpf) && emailValido(email) && provaOk && !enviando;
 
   async function onEnviar() {
     setErro(null);
     setEnviando(true);
     const r = await recuperarAcesso({
       cpf,
-      ...(semEmail
-        ? {
-            email: email.trim().toLowerCase(),
-            data_nascimento: dataParaISO(nascimento) ?? undefined,
-            telefone,
-          }
-        : {}),
+      email: email.trim().toLowerCase(),
+      // Só viajam quando preenchidos. `undefined` e nunca string vazia: '' quebraria o Zod da
+      // rota e derrubaria o pedido inteiro por um campo que é opcional.
+      ...(dataParaISO(nascimento) ? { data_nascimento: dataParaISO(nascimento)! } : {}),
+      ...(telefone.trim() ? { telefone } : {}),
     });
     setEnviando(false);
     if (r.ok) setEnviado(r.mensagem ?? 'Se houver uma conta com este CPF, enviamos o link.');
@@ -108,8 +113,7 @@ export default function Recuperar() {
         ) : (
           <>
             <Text style={s.sub}>
-              Informe o seu CPF. Enviaremos um link para o e-mail cadastrado, onde você cria uma
-              nova senha.
+              Informe o seu CPF e o seu e-mail. Enviaremos um link para criar uma nova senha.
             </Text>
 
             <View style={s.form}>
@@ -122,50 +126,37 @@ export default function Recuperar() {
                 maxLength={14}
               />
 
-              <Pressable
-                onPress={() => setSemEmail((v) => !v)}
-                style={s.toggle}
-                accessibilityRole="button"
-              >
-                <Text style={s.toggleTxt}>
-                  {semEmail ? '− ' : '+ '}
-                  Não tenho e-mail cadastrado
-                </Text>
-              </Pressable>
+              <Campo
+                rotulo="E-mail"
+                valor={email}
+                onChange={setEmail}
+                placeholder="voce@email.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                maxLength={160}
+              />
 
-              {semEmail ? (
-                <View>
-                  <Text style={s.ajuda}>
-                    Para cadastrar um e-mail agora, confirme seus dados. Enviaremos um link para
-                    o endereço informado.
-                  </Text>
-                  <Campo
-                    rotulo="E-mail"
-                    valor={email}
-                    onChange={setEmail}
-                    placeholder="voce@email.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    maxLength={160}
-                  />
-                  <Campo
-                    rotulo="Data de nascimento"
-                    valor={nascimento}
-                    onChange={(v) => setNascimento(mascaraData(v))}
-                    placeholder="DD/MM/AAAA"
-                    keyboardType="number-pad"
-                    maxLength={10}
-                  />
-                  <Campo
-                    rotulo="Telefone com DDD"
-                    valor={telefone}
-                    onChange={(v) => setTelefone(mascaraTelefone(v))}
-                    placeholder="(00) 00000-0000"
-                    keyboardType="phone-pad"
-                    maxLength={15}
-                  />
-                </View>
-              ) : null}
+              <Text style={s.ajuda}>
+                Nunca cadastrou um e-mail conosco? Preencha também os dois campos abaixo para
+                confirmar a sua identidade.
+              </Text>
+
+              <Campo
+                rotulo="Data de nascimento (opcional)"
+                valor={nascimento}
+                onChange={(v) => setNascimento(mascaraData(v))}
+                placeholder="DD/MM/AAAA"
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+              <Campo
+                rotulo="Telefone com DDD (opcional)"
+                valor={telefone}
+                onChange={(v) => setTelefone(mascaraTelefone(v))}
+                placeholder="(00) 00000-0000"
+                keyboardType="phone-pad"
+                maxLength={15}
+              />
 
               {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
@@ -229,8 +220,6 @@ const s = StyleSheet.create({
     color: color.ink,
     lineHeight: 22,
   },
-  toggle: { marginTop: space.lg, marginBottom: space.sm },
-  toggleTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
   ajuda: {
     fontFamily: font.regular,
     fontSize: size.sm,
