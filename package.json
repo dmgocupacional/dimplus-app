@@ -1,7 +1,7 @@
 {
   "name": "dimplus-app",
   "main": "expo-router/entry",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "dependencies": {
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
@@ -9,6 +9,7 @@
     "@supabase/supabase-js": "^2.111.0",
     "expo": "^57.0.0",
     "expo-constants": "~57.0.17",
+    "expo-dev-client": "^57.0.19",
     "expo-font": "~57.0.3",
     "expo-image": "~57.0.4",
     "expo-linking": "~57.0.9",
