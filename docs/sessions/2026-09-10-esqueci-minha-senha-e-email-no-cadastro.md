@@ -1,6 +1,9 @@
 # 2026-09-10 — Esqueci minha senha e e-mail no cadastro (v4.1.0)
 
-**Repo:** `dimplus-app` v4.0.1 → **v4.1.0**. Contraparte no `erp-dimplus` v0.298.0 → v0.302.0
+**Repo:** `dimplus-app` v4.0.1 → **v4.2.0**.
+
+> **✅ ENVIADO PARA REVISÃO na App Store em 10/09.** O bloqueio de produto que abriu a sessão
+> ("não existe esqueci minha senha") foi resolvido e submetido no mesmo dia. Contraparte no `erp-dimplus` v0.298.0 → v0.302.0
 (handoff detalhado lá em `docs/sessions/2026-09-10-recuperacao-acesso-adesao-convite-mcp-vercel.md`).
 
 ---
@@ -40,11 +43,24 @@ WhatsApp entra depois como segundo transporte, **sem mexer nesta tela** — o ap
 
 ---
 
-## O que ainda não funciona
+## Correções e adições do mesmo dia
 
-**O link do e-mail não abre.** Aponta para `app.dimmsaude.com.br`, subdomínio já adicionado no
-projeto Vercel mas ainda não resolvendo — a zona do Cloudflare está `pending` e não publica
-alteração. Dá para testar a tela e a chegada do e-mail; o link, não.
+**v4.1.1 — a tela `recuperar` era INALCANÇÁVEL.** Abria e voltava sozinha para o login, sem
+erro nenhum. O roteador do `_layout` raiz tem uma **lista fechada** de telas alcançáveis por
+quem está deslogado, e só `login` e `cadastro` estavam nela.
+🔴 **Mesmo modo de falha já documentado em 26/08**, quando `aceite-termo` existia e não era
+alcançável por rota nenhuma. A lição estava escrita e não tinha virado guarda. Agora o
+comentário avisa: **toda tela nova em `(auth)` que deva abrir sem sessão precisa entrar ali.**
+
+**v4.2.0 — bloco "não tenho e-mail cadastrado".** Recolhido por padrão (a maioria só precisa do
+CPF). Aberto, exige os **três juntos**: e-mail, nascimento e telefone. Mandar só o e-mail não
+adianta — o servidor descarta sem a segunda prova — e permitir isso produziria a mesma mensagem
+de sucesso sem nada acontecer, que é a pior confusão possível.
+Quem **já tem** e-mail recebe no endereço antigo e o informado é ignorado pelo servidor.
+
+---
+
+## O que ainda não funciona
 
 **O botão só aparece depois de um build novo** (ou update OTA no canal `preview`).
 
@@ -55,12 +71,12 @@ pagamento (Fase 3, no ERP). Hoje só a recuperação fecha ponta a ponta.
 
 ## Próximos passos no app
 
-1. Build novo e validar a tela num aparelho de verdade.
-2. **Screenshots de iPad** (2048×2732) — obrigatórias por causa de `supportsTablet: true`, e o
-   app nunca foi aberto em iPad. É o item mais chato que falta para a App Store.
-3. Criar a versão **4.1.0** na ficha do App Store Connect.
-4. Confirmar se o build 3 (4.0.1) chegou ao App Store Connect — o `eas submit` ficou pendente.
-5. **Play Store: nada existe ainda.** Nenhum build Android jamais rodou neste projeto. Falta
+1. **Acompanhar a revisão da App Store.** Se vier rejeição, o caminho mais provável agora é
+   metadados/ficha — o fluxo de acesso deixou de ser o ponto fraco.
+2. Testar a recuperação num aparelho de verdade, incluindo o caminho de quem **não tem** e-mail
+   cadastrado. O teste que mais importa: CPF inexistente e CPF existente com dados errados têm
+   que devolver resposta **idêntica**.
+3. **Play Store: nada existe ainda.** Nenhum build Android jamais rodou neste projeto. Falta
    conta no Play Console (US$ 25, verificação com dias de espera), `applicationId` novo
    (sugerido `br.com.dimeg.dimplus` — o bundle iOS `com.javenessi.dimmaissaude` não serve),
    keystore e Data Safety.
