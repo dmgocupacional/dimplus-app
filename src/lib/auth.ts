@@ -146,6 +146,8 @@ export async function solicitarCadastro(dados: {
 // app um oráculo de quem é cliente da DIM+ — o mesmo que o cadastro e o login evitam.
 export async function recuperarAcesso(dados: {
   cpf: string;
+  // 11/09/2026 — `email` passou a ser OBRIGATÓRIO para todos: quem já tem canal precisa
+  // provar que o conhece. Nascimento e telefone seguem só para quem nunca cadastrou e-mail.
   // 10/09/2026 — os três servem SÓ a quem ainda não tem e-mail cadastrado. Quem já tem canal
   // recebe no e-mail antigo e estes campos são IGNORADOS pelo servidor: e-mail de quem já tem
   // nunca é trocado por esta rota, senão bastaria saber um CPF para sequestrar a conta.
@@ -200,3 +202,50 @@ export async function sair(): Promise<void> {
   await supabase.auth.signOut();
 }
 // ── FIM BLOCO ──
+
+/**
+ * Primeiro acesso de quem JÁ É CLIENTE e nunca entrou no app.
+ *
+ * 11/09/2026 — 334 clientes ativos estavam sem conta. Esta é a porta deles.
+ *
+ * ⚠️ Resposta SEMPRE neutra, como a recuperação: a tela nunca sabe (e não pode mostrar) se o
+ * CPF é cliente, se está em dia ou se os dados bateram. Não tentar inferir nada do retorno.
+ */
+export async function pedirPrimeiroAcesso(dados: {
+  cpf: string;
+  email: string;
+  data_nascimento: string;
+  telefone: string;
+  termo_versao_id: string;
+  aceite: true;
+}): Promise<Resultado> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/app-primeiro-acesso`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados),
+    });
+    const json = (await resp.json()) as { ok?: boolean; mensagem?: string; error?: string };
+    if (!resp.ok) return { ok: false, erro: json.error ?? 'Não foi possível enviar agora.' };
+    return { ok: true, mensagem: json.mensagem };
+  } catch {
+    return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
+  }
+}
+
+/** Termo vigente da natureza `consumidor`, para a tela de primeiro acesso exibir e coletar aceite. */
+export async function buscarTermoVigente(): Promise<
+  { ok: true; id: string; versao: string; texto: string } | { ok: false; erro: string }
+> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/app-termo-cadastro`);
+    const json = (await resp.json()) as {
+      termo?: { id: string; versao: string; texto: string };
+      error?: string;
+    };
+    if (!resp.ok || !json.termo) return { ok: false, erro: json.error ?? 'Não foi possível carregar o termo.' };
+    return { ok: true, ...json.termo };
+  } catch {
+    return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
+  }
+}

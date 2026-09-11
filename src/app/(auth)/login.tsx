@@ -103,13 +103,27 @@ export default function Login() {
             )}
           </Pressable>
 
+          {/* 11/09/2026 — ESTE LINK ESTAVA ERRADO e o defeito era de produto, não de código.
+              "Primeiro acesso" mandava para `/cadastro`, que é a tela de quem NÃO é cliente:
+              o cliente que já paga se cadastrava de novo e caía em `conta_existente`. São
+              duas pessoas diferentes e agora são duas portas diferentes. */}
+          <Pressable
+            onPress={() => router.push('/primeiro-acesso' as never)}
+            style={s.link}
+            accessibilityRole="button"
+          >
+            <Text style={s.linkTxt}>
+              Já é cliente e nunca entrou? <Text style={s.linkForte}>Primeiro acesso</Text>
+            </Text>
+          </Pressable>
+
           <Pressable
             onPress={() => router.push('/cadastro' as never)}
             style={s.link}
             accessibilityRole="button"
           >
             <Text style={s.linkTxt}>
-              Primeiro acesso? <Text style={s.linkForte}>Criar meu acesso</Text>
+              Ainda não é cliente? <Text style={s.linkForte}>Criar meu acesso</Text>
             </Text>
           </Pressable>
 

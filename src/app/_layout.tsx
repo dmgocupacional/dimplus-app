@@ -64,7 +64,7 @@ function Roteador() {
       //
       // ⚠️ ESTA LISTA É FECHADA. Toda tela nova dentro de `(auth)` que deva ser alcançável sem
       // sessão precisa ser adicionada AQUI — senão ela existe, compila, e é inalcançável.
-      if (!emAuth || (rota !== 'login' && rota !== 'cadastro' && rota !== 'recuperar')) {
+      if (!emAuth || (rota !== 'login' && rota !== 'cadastro' && rota !== 'recuperar' && rota !== 'primeiro-acesso')) {
         router.replace('/login' as never);
       }
       return;
