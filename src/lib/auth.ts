@@ -263,6 +263,9 @@ export async function buscarTermoVigente(): Promise<
 export type SituacaoCpf =
   | { ok: true; situacao: 'tem_email'; mascara: string }
   | { ok: true; situacao: 'sem_email' }
+  // 14/09/2026 — cliente que NUNCA criou conta. São 334 ativos. O caminho deles não é
+  // recuperar senha (não há o que recuperar), é a tela de primeiro acesso.
+  | { ok: true; situacao: 'sem_conta'; ativo: boolean }
   | { ok: true; situacao: 'nao_cliente' }
   | { ok: false; erro: string };
 
@@ -274,8 +277,9 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
       body: JSON.stringify({ cpf }),
     });
     const json = (await resp.json()) as {
-      situacao?: 'tem_email' | 'sem_email' | 'nao_cliente';
+      situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente';
       mascara?: string;
+      ativo?: boolean;
       error?: string;
     };
     if (!resp.ok || !json.situacao) {
@@ -283,6 +287,9 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
     }
     if (json.situacao === 'tem_email') {
       return { ok: true, situacao: 'tem_email', mascara: json.mascara ?? '' };
+    }
+    if (json.situacao === 'sem_conta') {
+      return { ok: true, situacao: 'sem_conta', ativo: json.ativo === true };
     }
     return { ok: true, situacao: json.situacao };
   } catch {

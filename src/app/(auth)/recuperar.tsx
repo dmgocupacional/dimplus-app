@@ -34,6 +34,7 @@ type Etapa =
   | { nome: 'cpf' }
   | { nome: 'tem_email'; mascara: string }
   | { nome: 'sem_email' }
+  | { nome: 'sem_conta'; ativo: boolean }
   | { nome: 'nao_cliente' }
   | { nome: 'enviado'; mensagem: string };
 
@@ -68,6 +69,7 @@ export default function Recuperar() {
     }
     if (r.situacao === 'tem_email') setEtapa({ nome: 'tem_email', mascara: r.mascara });
     else if (r.situacao === 'sem_email') setEtapa({ nome: 'sem_email' });
+    else if (r.situacao === 'sem_conta') setEtapa({ nome: 'sem_conta', ativo: r.ativo });
     else setEtapa({ nome: 'nao_cliente' });
   }
 
@@ -115,6 +117,40 @@ export default function Recuperar() {
                 Voltar para <Text style={s.linkForte}>entrar</Text>
               </Text>
             </Pressable>
+          </>
+        ) : etapa.nome === 'sem_conta' ? (
+          <>
+            {/* 14/09/2026 — a pessoa É cliente, só nunca criou o acesso. Recuperar senha aqui
+                não faz sentido: não há senha a recuperar. Mandamos para a porta certa. */}
+            <Text style={s.titulo}>Você ainda não criou o seu acesso</Text>
+            <Text style={s.sub}>
+              {etapa.ativo
+                ? 'Esse CPF já é cliente DIM+, mas ainda não tem senha cadastrada. Crie o seu acesso em um minuto.'
+                : 'Esse CPF já é cliente DIM+, mas o plano não está ativo no momento. Fale com a gente para regularizar antes de criar o acesso.'}
+            </Text>
+
+            <View style={s.form}>
+              {etapa.ativo ? (
+                <Pressable
+                  style={({ pressed }) => [s.botao, pressed && s.botaoPress]}
+                  onPress={() => router.replace('/primeiro-acesso' as never)}
+                >
+                  <Text style={s.botaoTxt}>Criar o meu acesso</Text>
+                </Pressable>
+              ) : null}
+
+              <Pressable style={s.link} onPress={voltarAoCpf}>
+                <Text style={s.linkTxt}>
+                  Digitar <Text style={s.linkForte}>outro CPF</Text>
+                </Text>
+              </Pressable>
+
+              <Pressable style={s.link} onPress={() => router.replace('/login' as never)}>
+                <Text style={s.linkTxt}>
+                  Voltar para <Text style={s.linkForte}>entrar</Text>
+                </Text>
+              </Pressable>
+            </View>
           </>
         ) : etapa.nome === 'nao_cliente' ? (
           <>
