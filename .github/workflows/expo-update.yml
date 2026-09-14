@@ -29,6 +29,12 @@ jobs:
   update:
     name: EAS Update
     runs-on: ubuntu-latest
+    # `issues: write` é obrigatório para o alerta de falha abrir issue. Sem isto o
+    # GITHUB_TOKEN vem somente-leitura em muitas configurações e o passo de alerta falha —
+    # um alerta que falha em silêncio seria pior que não ter alerta nenhum.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -56,3 +62,35 @@ jobs:
             --environment preview \
             --message "${{ github.event.head_commit.message || 'manual' }}" \
             --non-interactive
+
+      # ═══ ALERTA DE FALHA ═══
+      # 14/09/2026 — nasce de um dia inteiro perdido. Este workflow falhou CALADO três vezes
+      # (51d2a6b, ffc1b91, f73e3b1, 09e763e): o commit ia para a main, a versão bumpava, e o
+      # bundle NÃO. O Henrique seguiu testando no celular um bundle mais velho que o repo,
+      # achando que estava olhando o código atual — e o diagnóstico do que parecia bug de tela
+      # custou horas até alguém pensar em conferir se a publicação tinha saído.
+      #
+      # A notificação padrão do GitHub por e-mail existe, mas se perde na caixa. Uma ISSUE é
+      # visível no repo, não depende de e-mail, e não precisa de secret nenhum: o GITHUB_TOKEN
+      # já vem no runner. Menos peças para quebrar em silêncio — que é o ponto.
+      - name: Abrir issue se a publicação falhar
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.sha.slice(0, 7)
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔴 EAS Update falhou em ${sha}`,
+              body: [
+                `A publicação do commit \`${sha}\` **não saiu**.`,
+                ``,
+                `⚠️ O bundle no celular continua o da publicação bem-sucedida ANTERIOR.`,
+                `Qualquer teste feito no app agora está rodando código velho — não confie`,
+                `no que a tela mostrar até isto ser resolvido.`,
+                ``,
+                `Log: ${url}`,
+              ].join('\n'),
+            })
