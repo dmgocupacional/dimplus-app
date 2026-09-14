@@ -91,6 +91,8 @@ export default function PrimeiroAcesso() {
     });
 
     setEnviando(false);
+    // 14/09/2026 — o servidor deixou de responder neutro: cada porta agora diz o que houve.
+    // A tela só precisa mostrar o texto que veio, porque ele é específico da situação.
     if (r.ok) setMensagem(r.mensagem ?? 'Pedido enviado.');
     else setErro(r.erro);
   }
@@ -106,7 +108,7 @@ export default function PrimeiroAcesso() {
       >
         {mensagem ? (
           <>
-            <Text style={s.titulo}>Confira o seu e-mail</Text>
+            <Text style={s.titulo}>Acesso criado!</Text>
             <View style={[s.aviso, { marginTop: space.xl }]}>
               <Text style={s.avisoTxt}>{mensagem}</Text>
             </View>
