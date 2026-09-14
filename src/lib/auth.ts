@@ -211,6 +211,15 @@ export async function sair(): Promise<void> {
  * ⚠️ Resposta SEMPRE neutra, como a recuperação: a tela nunca sabe (e não pode mostrar) se o
  * CPF é cliente, se está em dia ou se os dados bateram. Não tentar inferir nada do retorno.
  */
+/**
+ * 14/09/2026 — `campos` diz QUAIS campos não conferem, para a tela pintar a borda vermelha
+ * neles. A rota sempre soube (nascimento e telefone são conferidos separado) e jogava fora,
+ * mandando a pessoa procurar nos dois um erro que o servidor já tinha localizado.
+ */
+export type ResultadoCampos =
+  | { ok: true; mensagem?: string }
+  | { ok: false; erro: string; campos?: string[] };
+
 export async function pedirPrimeiroAcesso(dados: {
   cpf: string;
   email: string;
@@ -218,15 +227,26 @@ export async function pedirPrimeiroAcesso(dados: {
   telefone: string;
   termo_versao_id: string;
   aceite: true;
-}): Promise<Resultado> {
+}): Promise<ResultadoCampos> {
   try {
     const resp = await fetch(`${API_BASE}/api/public/app-primeiro-acesso`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dados),
     });
-    const json = (await resp.json()) as { ok?: boolean; mensagem?: string; error?: string };
-    if (!resp.ok) return { ok: false, erro: json.error ?? 'Não foi possível enviar agora.' };
+    const json = (await resp.json()) as {
+      ok?: boolean;
+      mensagem?: string;
+      error?: string;
+      campos?: string[];
+    };
+    if (!resp.ok) {
+      return {
+        ok: false,
+        erro: json.error ?? 'Não foi possível enviar agora.',
+        campos: json.campos ?? [],
+      };
+    }
     return { ok: true, mensagem: json.mensagem };
   } catch {
     return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };

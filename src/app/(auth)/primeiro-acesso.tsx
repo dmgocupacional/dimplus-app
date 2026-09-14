@@ -47,6 +47,11 @@ export default function PrimeiroAcesso() {
 
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // 14/09/2026 — quais campos o servidor apontou como divergentes. A borda vermelha sai daqui.
+  // Limpa assim que a pessoa edita QUALQUER um deles: manter o vermelho depois da correção faz
+  // a tela continuar acusando um erro que já não existe.
+  const [camposErro, setCamposErro] = useState<string[]>([]);
+  const errado = (campo: string) => camposErro.includes(campo);
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   // O termo é buscado na abertura da tela, não no envio: descobrir que ele não carregou só
@@ -80,6 +85,7 @@ export default function PrimeiroAcesso() {
     if (!podeEnviar || !termo) return;
     setEnviando(true);
     setErro(null);
+    setCamposErro([]);
 
     const r = await pedirPrimeiroAcesso({
       cpf,
@@ -93,8 +99,12 @@ export default function PrimeiroAcesso() {
     setEnviando(false);
     // 14/09/2026 — o servidor deixou de responder neutro: cada porta agora diz o que houve.
     // A tela só precisa mostrar o texto que veio, porque ele é específico da situação.
-    if (r.ok) setMensagem(r.mensagem ?? 'Pedido enviado.');
-    else setErro(r.erro);
+    if (r.ok) {
+      setMensagem(r.mensagem ?? 'Pedido enviado.');
+    } else {
+      setErro(r.erro);
+      setCamposErro(r.campos ?? []);
+    }
   }
 
   return (
@@ -138,7 +148,11 @@ export default function PrimeiroAcesso() {
               <Campo
                 rotulo="E-mail"
                 valor={email}
-                onChange={setEmail}
+                onChange={(v) => {
+                  setEmail(v);
+                  setCamposErro((c) => c.filter((x) => x !== 'email'));
+                }}
+                invalido={errado('email')}
                 placeholder="voce@email.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -147,7 +161,11 @@ export default function PrimeiroAcesso() {
               <Campo
                 rotulo="Data de nascimento"
                 valor={nascimento}
-                onChange={(v) => setNascimento(mascaraData(v))}
+                onChange={(v) => {
+                  setNascimento(mascaraData(v));
+                  setCamposErro((c) => c.filter((x) => x !== 'data_nascimento'));
+                }}
+                invalido={errado('data_nascimento')}
                 placeholder="DD/MM/AAAA"
                 keyboardType="number-pad"
                 maxLength={10}
@@ -155,7 +173,11 @@ export default function PrimeiroAcesso() {
               <Campo
                 rotulo="Telefone com DDD"
                 valor={telefone}
-                onChange={(v) => setTelefone(mascaraTelefone(v))}
+                onChange={(v) => {
+                  setTelefone(mascaraTelefone(v));
+                  setCamposErro((c) => c.filter((x) => x !== 'telefone'));
+                }}
+                invalido={errado('telefone')}
                 placeholder="(00) 00000-0000"
                 keyboardType="phone-pad"
                 maxLength={15}
