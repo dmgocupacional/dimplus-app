@@ -249,3 +249,43 @@ export async function buscarTermoVigente(): Promise<
     return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
   }
 }
+
+/**
+ * ETAPA 1 da recuperação: descobre a situação do CPF antes de pedir qualquer outra coisa.
+ *
+ * 🔴 14/09/2026 — esta rota NÃO é neutra, ao contrário de todas as outras. É reversão
+ * consciente da decisão de 11/09: 160 dos 902 clientes não têm e-mail cadastrado e ficavam
+ * presos sem saber por quê, porque a tela não podia dizer que nascimento e telefone eram
+ * obrigatórios para eles sem revelar a bifurcação.
+ *
+ * A máscara é LEMBRETE, não chave: a etapa 2 exige o e-mail completo e trava se não bater.
+ */
+export type SituacaoCpf =
+  | { ok: true; situacao: 'tem_email'; mascara: string }
+  | { ok: true; situacao: 'sem_email' }
+  | { ok: true; situacao: 'nao_cliente' }
+  | { ok: false; erro: string };
+
+export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/app-recuperar/consultar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cpf }),
+    });
+    const json = (await resp.json()) as {
+      situacao?: 'tem_email' | 'sem_email' | 'nao_cliente';
+      mascara?: string;
+      error?: string;
+    };
+    if (!resp.ok || !json.situacao) {
+      return { ok: false, erro: json.error ?? 'Não foi possível consultar agora.' };
+    }
+    if (json.situacao === 'tem_email') {
+      return { ok: true, situacao: 'tem_email', mascara: json.mascara ?? '' };
+    }
+    return { ok: true, situacao: json.situacao };
+  } catch {
+    return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
+  }
+}

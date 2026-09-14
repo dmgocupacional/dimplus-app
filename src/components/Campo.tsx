@@ -19,6 +19,10 @@ type Props = {
   keyboardType?: ComponentProps<typeof TextInput>['keyboardType'];
   autoCapitalize?: ComponentProps<typeof TextInput>['autoCapitalize'];
   maxLength?: number;
+  // 14/09/2026 — a recuperação em duas etapas trava o CPF depois da consulta: o campo segue
+  // visível para a pessoa conferir o que digitou, mas não editável, porque mudar o CPF ali
+  // deixaria a tela mostrando a situação de um CPF e enviando outro.
+  editable?: boolean;
 };
 
 export function Campo({
@@ -32,6 +36,7 @@ export function Campo({
   keyboardType,
   autoCapitalize = 'none',
   maxLength,
+  editable = true,
 }: Props) {
   const [revelado, setRevelado] = useState(false);
   const escondido = !!segredo && !revelado;
@@ -47,6 +52,7 @@ export function Campo({
           placeholder={placeholder}
           placeholderTextColor={color.ink3}
           secureTextEntry={escondido}
+          editable={editable}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           autoCorrect={false}
