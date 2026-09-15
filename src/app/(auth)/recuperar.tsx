@@ -15,6 +15,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
+  Modal,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -29,6 +31,11 @@ import { Campo } from '@/components/Campo';
 import { consultarSituacaoCpf, cpfValido, emailValido, recuperarAcesso } from '@/lib/auth';
 import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
+
+// Canal oficial, o mesmo já usado na tela de Ajuda. Não duplicar número aqui: se mudar, muda
+// em um lugar só. → src/app/ajuda.tsx
+const WHATS = '5511995192094';
+const WHATS_LEGIVEL = '(11) 99519-2094';
 
 type Etapa =
   | { nome: 'cpf' }
@@ -47,6 +54,11 @@ export default function Recuperar() {
   const [nascimento, setNascimento] = useState('');
   const [telefone, setTelefone] = useState('');
 
+  // 🔴 15/09/2026 — BLOQUEIO É MODAL, E JÁ NA ETAPA DO CPF. Antes o cliente `cancelado`
+  // entrava no fluxo, preenchia e-mail e prova de identidade, e só descobria no fim — ou nem
+  // descobria. Não é erro que se corrige na tela: a saída é falar com a equipe, então a tela
+  // entrega o canal junto em vez de só dizer não.
+  const [bloqueado, setBloqueado] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -65,6 +77,10 @@ export default function Recuperar() {
 
     if (!r.ok) {
       setErro(r.erro);
+      return;
+    }
+    if (r.situacao === 'bloqueado') {
+      setBloqueado(true);
       return;
     }
     if (r.situacao === 'tem_email') setEtapa({ nome: 'tem_email', mascara: r.mascara });
@@ -298,6 +314,50 @@ export default function Recuperar() {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={bloqueado}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBloqueado(false)}
+      >
+        <View style={s.fundoModal}>
+          <View style={s.caixaModal}>
+            <Text style={s.tituloModal}>Cadastro bloqueado</Text>
+            <Text style={s.textoModal}>
+              O plano desse CPF não está ativo no momento, então não conseguimos liberar o
+              acesso por aqui. Fale com a nossa equipe que a gente resolve.
+            </Text>
+            <Text style={s.telefoneModal}>{WHATS_LEGIVEL}</Text>
+
+            <Pressable
+              style={({ pressed }) => [s.botao, pressed && s.botaoPress]}
+              onPress={() => {
+                // Mensagem pronta: a pessoa não precisa explicar de novo o que já tentou, e a
+                // equipe recebe o assunto identificado.
+                const texto = encodeURIComponent(
+                  'Olá! Tentei acessar o app do DIM+ e apareceu que o meu cadastro está bloqueado.',
+                );
+                void Linking.openURL(`https://wa.me/${WHATS}?text=${texto}`);
+              }}
+            >
+              <Text style={s.botaoTxt}>Falar no WhatsApp</Text>
+            </Pressable>
+
+            <Pressable
+              style={s.link}
+              onPress={() => {
+                setBloqueado(false);
+                voltarAoCpf();
+              }}
+            >
+              <Text style={s.linkTxt}>
+                Digitar <Text style={s.linkForte}>outro CPF</Text>
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -344,6 +404,27 @@ const s = StyleSheet.create({
   botaoOff: { backgroundColor: color.border },
   botaoPress: { backgroundColor: color.greenDeep },
   botaoTxt: { fontFamily: font.black, fontSize: size.base, color: color.navy },
+  fundoModal: {
+    flex: 1,
+    backgroundColor: 'rgba(16, 20, 32, 0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: space.xl,
+  },
+  caixaModal: { backgroundColor: color.offwhite, borderRadius: radius.lg, padding: space.xl },
+  tituloModal: { fontFamily: font.black, fontSize: size.lg, color: color.ink },
+  textoModal: {
+    fontFamily: font.regular,
+    fontSize: size.base,
+    color: color.ink2,
+    lineHeight: 22,
+    marginTop: space.sm,
+  },
+  telefoneModal: {
+    fontFamily: font.bold,
+    fontSize: size.lg,
+    color: color.navy,
+    marginTop: space.md,
+  },
   link: { marginTop: space.xl, alignItems: 'center' },
   linkTxt: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2 },
   linkForte: { fontFamily: font.bold, color: color.navy },

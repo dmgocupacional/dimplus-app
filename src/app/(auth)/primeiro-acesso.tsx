@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -33,6 +34,14 @@ import { Campo } from '@/components/Campo';
 import { buscarTermoVigente, cpfValido, emailValido, pedirPrimeiroAcesso } from '@/lib/auth';
 import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
+
+// Canal oficial, o mesmo da tela de Ajuda e da recuperação. → src/app/ajuda.tsx
+const WHATS = '5511995192094';
+const WHATS_LEGIVEL = '(11) 99519-2094';
+
+function abrirWhats(assunto: string) {
+  void Linking.openURL(`https://wa.me/${WHATS}?text=${encodeURIComponent(assunto)}`);
+}
 
 export default function PrimeiroAcesso() {
   const insets = useSafeAreaInsets();
@@ -118,10 +127,31 @@ export default function PrimeiroAcesso() {
   }
 
   // Cada bloqueio tem uma saída própria. Modal sem ação seria só um "não" mais bonito.
+  // 15/09/2026 — os dois bloqueios que dependem da equipe passam a entregar o CANAL, não só a
+  // recusa. Modal que diz "fale com a gente" sem dizer com quem é um não mais bonito.
   const acaoDoBloqueio =
     bloqueio?.motivo === 'ja_tem_conta'
-      ? { rotulo: 'Ir para "Esqueci minha senha"', ir: () => router.replace('/recuperar' as never) }
-      : null;
+      ? {
+          rotulo: 'Ir para Esqueci minha senha',
+          ir: () => router.replace('/recuperar' as never),
+        }
+      : bloqueio?.motivo === 'nao_ativo'
+        ? {
+            rotulo: 'Falar no WhatsApp',
+            ir: () =>
+              abrirWhats(
+                'Olá! Tentei criar o meu acesso no app do DIM+ e apareceu que o meu plano não está ativo.',
+              ),
+          }
+        : bloqueio?.motivo === 'sem_dados_cadastrados'
+          ? {
+              rotulo: 'Falar no WhatsApp',
+              ir: () =>
+                abrirWhats(
+                  'Olá! Tentei criar o meu acesso no app do DIM+ e faltam dados no meu cadastro.',
+                ),
+            }
+          : null;
 
   return (
     <KeyboardAvoidingView
@@ -280,6 +310,9 @@ export default function PrimeiroAcesso() {
                   : 'Falta completar o seu cadastro'}
             </Text>
             <Text style={s.textoModal}>{bloqueio?.texto}</Text>
+            {bloqueio && bloqueio.motivo !== 'ja_tem_conta' ? (
+              <Text style={s.telefoneModal}>{WHATS_LEGIVEL}</Text>
+            ) : null}
 
             {acaoDoBloqueio ? (
               <Pressable
@@ -371,6 +404,12 @@ const s = StyleSheet.create({
     padding: space.xl,
   },
   tituloModal: { fontFamily: font.black, fontSize: size.lg, color: color.ink },
+  telefoneModal: {
+    fontFamily: font.bold,
+    fontSize: size.lg,
+    color: color.navy,
+    marginTop: space.md,
+  },
   textoModal: {
     fontFamily: font.regular,
     fontSize: size.base,

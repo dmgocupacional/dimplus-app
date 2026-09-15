@@ -291,6 +291,8 @@ export type SituacaoCpf =
   // 14/09/2026 — cliente que NUNCA criou conta. São 334 ativos. O caminho deles não é
   // recuperar senha (não há o que recuperar), é a tela de primeiro acesso.
   | { ok: true; situacao: 'sem_conta'; ativo: boolean }
+  // 15/09/2026 — plano não ativo. Terminal: a saída é falar com a equipe, não corrigir campo.
+  | { ok: true; situacao: 'bloqueado'; status: string }
   | { ok: true; situacao: 'nao_cliente' }
   | { ok: false; erro: string };
 
@@ -302,9 +304,10 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
       body: JSON.stringify({ cpf }),
     });
     const json = (await resp.json()) as {
-      situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente';
+      situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente' | 'bloqueado';
       mascara?: string;
       ativo?: boolean;
+      status?: string;
       error?: string;
     };
     if (!resp.ok || !json.situacao) {
@@ -312,6 +315,9 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
     }
     if (json.situacao === 'tem_email') {
       return { ok: true, situacao: 'tem_email', mascara: json.mascara ?? '' };
+    }
+    if (json.situacao === 'bloqueado') {
+      return { ok: true, situacao: 'bloqueado', status: json.status ?? '' };
     }
     if (json.situacao === 'sem_conta') {
       return { ok: true, situacao: 'sem_conta', ativo: json.ativo === true };
