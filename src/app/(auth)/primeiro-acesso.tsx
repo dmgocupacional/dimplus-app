@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -52,6 +53,13 @@ export default function PrimeiroAcesso() {
   // a tela continuar acusando um erro que já não existe.
   const [camposErro, setCamposErro] = useState<string[]>([]);
   const errado = (campo: string) => camposErro.includes(campo);
+
+  // 🔴 ERRO TERMINAL vira MODAL. O critério é se a pessoa resolve AQUI ou precisa SAIR: dado
+  // que não confere ela corrige na hora (borda vermelha basta); "você já tem conta" e "plano
+  // não está ativo" exigem outra tela ou a nossa equipe, e uma linha de texto embaixo do botão
+  // faz ela tentar de novo à toa.
+  const [bloqueio, setBloqueio] = useState<{ motivo: string; texto: string } | null>(null);
+  const TERMINAIS = ['ja_tem_conta', 'nao_ativo', 'sem_dados_cadastrados'];
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   // O termo é buscado na abertura da tela, não no envio: descobrir que ele não carregou só
@@ -101,11 +109,19 @@ export default function PrimeiroAcesso() {
     // A tela só precisa mostrar o texto que veio, porque ele é específico da situação.
     if (r.ok) {
       setMensagem(r.mensagem ?? 'Pedido enviado.');
+    } else if (r.motivo && TERMINAIS.includes(r.motivo)) {
+      setBloqueio({ motivo: r.motivo, texto: r.erro });
     } else {
       setErro(r.erro);
       setCamposErro(r.campos ?? []);
     }
   }
+
+  // Cada bloqueio tem uma saída própria. Modal sem ação seria só um "não" mais bonito.
+  const acaoDoBloqueio =
+    bloqueio?.motivo === 'ja_tem_conta'
+      ? { rotulo: 'Ir para "Esqueci minha senha"', ir: () => router.replace('/recuperar' as never) }
+      : null;
 
   return (
     <KeyboardAvoidingView
@@ -140,7 +156,11 @@ export default function PrimeiroAcesso() {
               <Campo
                 rotulo="CPF"
                 valor={cpf}
-                onChange={(v) => setCpf(mascaraCPF(v))}
+                onChange={(v) => {
+                  setCpf(mascaraCPF(v));
+                  setCamposErro((c) => c.filter((x) => x !== 'cpf'));
+                }}
+                invalido={errado('cpf')}
                 placeholder="000.000.000-00"
                 keyboardType="number-pad"
                 maxLength={14}
@@ -243,6 +263,44 @@ export default function PrimeiroAcesso() {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={!!bloqueio}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBloqueio(null)}
+      >
+        <View style={s.fundoModal}>
+          <View style={s.caixaModal}>
+            <Text style={s.tituloModal}>
+              {bloqueio?.motivo === 'ja_tem_conta'
+                ? 'Você já tem acesso'
+                : bloqueio?.motivo === 'nao_ativo'
+                  ? 'Plano não está ativo'
+                  : 'Falta completar o seu cadastro'}
+            </Text>
+            <Text style={s.textoModal}>{bloqueio?.texto}</Text>
+
+            {acaoDoBloqueio ? (
+              <Pressable
+                style={({ pressed }) => [s.botao, pressed && s.botaoPress]}
+                onPress={() => {
+                  setBloqueio(null);
+                  acaoDoBloqueio.ir();
+                }}
+              >
+                <Text style={s.botaoTxt}>{acaoDoBloqueio.rotulo}</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable style={s.link} onPress={() => setBloqueio(null)}>
+              <Text style={s.linkTxt}>
+                {acaoDoBloqueio ? 'Fechar' : <Text style={s.linkForte}>Entendi</Text>}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -301,6 +359,25 @@ const s = StyleSheet.create({
   link: { marginTop: space.xl, alignItems: 'center' },
   linkTxt: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2 },
   linkForte: { fontFamily: font.bold, color: color.navy },
+  fundoModal: {
+    flex: 1,
+    backgroundColor: 'rgba(16, 20, 32, 0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: space.xl,
+  },
+  caixaModal: {
+    backgroundColor: color.offwhite,
+    borderRadius: radius.lg,
+    padding: space.xl,
+  },
+  tituloModal: { fontFamily: font.black, fontSize: size.lg, color: color.ink },
+  textoModal: {
+    fontFamily: font.regular,
+    fontSize: size.base,
+    color: color.ink2,
+    lineHeight: 22,
+    marginTop: space.sm,
+  },
   rodape: {
     fontFamily: font.regular,
     fontSize: size.xs,

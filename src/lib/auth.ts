@@ -218,7 +218,10 @@ export async function sair(): Promise<void> {
  */
 export type ResultadoCampos =
   | { ok: true; mensagem?: string }
-  | { ok: false; erro: string; campos?: string[] };
+  // `motivo` diz se o erro é CORRIGÍVEL na tela (borda vermelha no campo) ou TERMINAL (modal,
+  // porque a pessoa precisa sair da tela). Texto inline num erro terminal faz ela tentar de
+  // novo à toa.
+  | { ok: false; erro: string; campos?: string[]; motivo?: string };
 
 export async function pedirPrimeiroAcesso(dados: {
   cpf: string;
@@ -239,12 +242,14 @@ export async function pedirPrimeiroAcesso(dados: {
       mensagem?: string;
       error?: string;
       campos?: string[];
+      motivo?: string;
     };
     if (!resp.ok) {
       return {
         ok: false,
         erro: json.error ?? 'Não foi possível enviar agora.',
         campos: json.campos ?? [],
+        motivo: json.motivo,
       };
     }
     return { ok: true, mensagem: json.mensagem };
