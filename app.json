@@ -2,13 +2,13 @@
   "expo": {
     "name": "DIM+ Saúde",
     "slug": "dimplus",
-    "version": "4.12.1",
+    "version": "4.13.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "scheme": "dimplus",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "com.javenessi.dimmaissaude",
+      "package": "br.com.dimmsaude.app",
       "adaptiveIcon": {
         "backgroundColor": "#202745",
         "foregroundImage": "./assets/brand/icon-adaptive.png"

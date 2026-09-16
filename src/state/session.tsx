@@ -18,7 +18,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { getCliente, getFaturas, getModulos, getRede } from '@/lib/data';
+import { getCliente, getElegibilidade, getFaturas, getModulos, getRede } from '@/lib/data';
+import type { Elegibilidade } from '@/lib/data';
 import { buscarTermoPendente } from '@/lib/contrato';
 import { isAdimplente, podeAcessar } from '@/lib/gate';
 import type { MotivoBloqueio } from '@/lib/gate';
@@ -37,7 +38,10 @@ type SessionValue = {
   modulos: Modulo[];
   faturas: Fatura[];
   rede: Parceiro[];
+  /** Só as faturas: alimenta o Financeiro ("total em aberto"). */
   adimplente: boolean;
+  /** Régua única (fn_elegibilidade): decide cadeado, selo do cartão e aviso da home. */
+  elegivel: boolean;
   acesso: AppAcesso;
   /** true = há termo publicado esperando aceite. null = ainda não se sabe (não bloqueia). */
   aceitePendente: boolean | null;
@@ -56,12 +60,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [modulos, setModulos] = useState<Modulo[]>([]);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
   const [rede, setRede] = useState<Parceiro[]>([]);
+  const [elegibilidade, setElegibilidade] = useState<Elegibilidade | null>(null);
 
   const limpar = useCallback(() => {
     setCliente(null);
     setModulos([]);
     setFaturas([]);
     setRede([]);
+    setElegibilidade(null);
   }, []);
 
   // Carrega tudo que a sessão atual consegue ver. Só é chamado COM sessão.
@@ -74,11 +80,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setEstado('aguardando');
       return;
     }
-    const [m, f, r] = await Promise.all([getModulos(), getFaturas(), getRede()]);
+    const [m, f, r, e] = await Promise.all([
+      getModulos(),
+      getFaturas(),
+      getRede(),
+      getElegibilidade(),
+    ]);
     setCliente(c);
     setModulos(m);
     setFaturas(f);
     setRede(r);
+    setElegibilidade(e);
     setEstado('pronto');
   }, [limpar]);
 
@@ -106,6 +118,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [carregar, limpar]);
 
   const adimplente = useMemo(() => isAdimplente(faturas), [faturas]);
+  // Sem resposta do servidor, vale o cálculo antigo pelas faturas — a tela nunca trava por
+  // falha de rede, e quem barra de fato é a fn_cliente_pode no servidor.
+  const elegivel = elegibilidade ? elegibilidade.elegivel : adimplente;
   const acesso: AppAcesso = cliente?.app_acesso ?? 'bloqueado';
 
   // ═══ ACEITE PENDENTE ═══
@@ -140,9 +155,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     (key: ModuloKey): Veredito => {
       const m = modulos.find((x) => x.key === key);
       if (!m) return { pode: false, motivo: 'modulo_desativado' };
-      return podeAcessar(acesso, m, adimplente);
+      return podeAcessar(acesso, m, elegivel);
     },
-    [modulos, acesso, adimplente]
+    [modulos, acesso, elegivel]
   );
 
   const sair = useCallback(async () => {
@@ -161,6 +176,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     faturas,
     rede,
     adimplente,
+    elegivel,
     acesso,
     pode,
     modulo,

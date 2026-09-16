@@ -20,6 +20,10 @@ const FAQ: { p: string; r: string }[] = [
     r: 'São serviços já contratados que ainda estão sendo ativados: agendamento, exames, telemedicina e SOS. Você será avisado quando abrirem.',
   },
   {
+    p: 'Como cancelo o meu plano?',
+    r: 'O cancelamento é feito com a nossa central, pelo WhatsApp no topo desta tela. Atenção: excluir a conta do app não cancela o plano nem as cobranças.',
+  },
+  {
     p: 'Como atualizo meu telefone?',
     r: 'Fale com a central. O telefone é o seu dado de acesso ao app, então a troca passa por conferência.',
   },

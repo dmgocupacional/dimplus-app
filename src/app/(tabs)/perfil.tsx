@@ -6,13 +6,14 @@ import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react
 import { Card, LinhaLista, Pill, Screen, Titulo } from '@/components/ui';
 import { excluirMinhaConta } from '@/lib/conta';
 import { formatCPF } from '@/lib/format';
+import { rotuloEstadoPlano } from '@/lib/gate';
 import { API_BASE } from '@/lib/supabase';
 import { APP_VERSION, APP_VERSION_DATA } from '@/lib/version';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 export default function Perfil() {
-  const { carregando, cliente, acesso, adimplente, sair } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, sair } = useSession();
   const [excluindo, setExcluindo] = useState(false);
 
   // ═══ EXCLUSÃO DE CONTA — EXIGÊNCIA DE LOJA ═══
@@ -78,14 +79,7 @@ export default function Perfil() {
     .join('')
     .toUpperCase();
 
-  const estado =
-    acesso === 'bloqueado'
-      ? { texto: 'sem acesso', tom: 'erro' as const }
-      : acesso === 'suspenso'
-        ? { texto: 'suspenso', tom: 'aviso' as const }
-        : !adimplente
-          ? { texto: 'em atraso', tom: 'erro' as const }
-          : { texto: 'ativo', tom: 'ok' as const };
+  const estado = rotuloEstadoPlano(acesso, elegivel, adimplente); // → BLOCO: GATE DE ACESSO
 
   return (
     <Screen titulo="Perfil">

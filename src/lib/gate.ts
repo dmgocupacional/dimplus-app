@@ -30,16 +30,30 @@ export type MotivoBloqueio = 'sem_acesso' | 'modulo_desativado' | 'inadimplente'
  *          ∧ flag do módulo ligada
  *          ∧ (¬exige_pagamento ∨ (app_acesso = 'liberado' ∧ adimplente))
  */
+// `elegivel` vem da fn_elegibilidade (via sessão) desde 16/09/2026 — não é mais só adimplência.
 export function podeAcessar(
   acesso: AppAcesso,
   modulo: Modulo,
-  adimplente: boolean
+  elegivel: boolean
 ): { pode: boolean; motivo: MotivoBloqueio } {
   if (acesso === 'bloqueado') return { pode: false, motivo: 'sem_acesso' };
   if (!modulo.ativo) return { pode: false, motivo: 'modulo_desativado' };
   if (!modulo.exige_pagamento) return { pode: true, motivo: null };
-  if (acesso === 'liberado' && adimplente) return { pode: true, motivo: null };
+  if (acesso === 'liberado' && elegivel) return { pode: true, motivo: null };
   return { pode: false, motivo: 'inadimplente' };
+}
+
+/** Selo de estado do plano — fonte única para o cartão (Início) e o Perfil. */
+export function rotuloEstadoPlano(
+  acesso: AppAcesso,
+  elegivel: boolean,
+  adimplente: boolean
+): { texto: string; tom: 'ok' | 'aviso' | 'erro' } {
+  if (acesso === 'bloqueado') return { texto: 'sem acesso', tom: 'erro' };
+  if (acesso === 'suspenso') return { texto: 'suspenso', tom: 'aviso' };
+  // Inelegível SEM fatura em aberto = plano cancelado/encerrado. "Em atraso" seria falso.
+  if (!elegivel) return { texto: adimplente ? 'inativo' : 'em atraso', tom: 'erro' };
+  return { texto: 'ativo', tom: 'ok' };
 }
 
 export function mensagemBloqueio(motivo: MotivoBloqueio): string {
@@ -49,7 +63,7 @@ export function mensagemBloqueio(motivo: MotivoBloqueio): string {
     case 'modulo_desativado':
       return 'Este serviço estará disponível em breve.';
     case 'inadimplente':
-      return 'Benefício bloqueado — regularize seu pagamento para liberar.';
+      return 'Benefício bloqueado. Veja a aba Financeiro ou fale com a central.';
     default:
       return '';
   }

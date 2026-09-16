@@ -7,31 +7,25 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Pill } from '@/components/ui';
 import { formatMesAno, maskCPF } from '@/lib/format';
+import { rotuloEstadoPlano } from '@/lib/gate';
 import type { AppAcesso, Cliente } from '@/lib/types';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 const LOGO_BRANCO = require('../../assets/brand/logo-white.png');
 
-function rotuloEstado(acesso: AppAcesso, adimplente: boolean): {
-  texto: string;
-  tom: 'ok' | 'aviso' | 'erro';
-} {
-  if (acesso === 'bloqueado') return { texto: 'sem acesso', tom: 'erro' };
-  if (acesso === 'suspenso') return { texto: 'suspenso', tom: 'aviso' };
-  if (!adimplente) return { texto: 'em atraso', tom: 'erro' };
-  return { texto: 'ativo', tom: 'ok' };
-}
 
 export function CartaoDigital({
   cliente,
   acesso,
+  elegivel,
   adimplente,
 }: {
   cliente: Cliente;
   acesso: AppAcesso;
+  elegivel: boolean;
   adimplente: boolean;
 }) {
-  const estado = rotuloEstado(acesso, adimplente);
+  const estado = rotuloEstadoPlano(acesso, elegivel, adimplente); // → BLOCO: GATE DE ACESSO
 
   return (
     <View style={s.cartao}>

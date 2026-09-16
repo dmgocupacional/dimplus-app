@@ -46,7 +46,7 @@ const ATALHOS: Atalho[] = [
 ];
 
 export default function Inicio() {
-  const { carregando, cliente, acesso, adimplente, pode, modulo } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, pode, modulo } = useSession();
   const [toast, setToast] = useState<string | null>(null);
 
   if (carregando || !cliente) {
@@ -60,7 +60,11 @@ export default function Inicio() {
   }
 
   const primeiroNome = cliente.nome.split(' ')[0];
-  const bloqueadoPorAtraso = acesso !== 'bloqueado' && !adimplente;
+  const inelegivel = acesso !== 'bloqueado' && !elegivel;
+  // Fatura em aberto é a causa que a pessoa resolve sozinha; o resto (cancelado, encerrado)
+  // passa pela central.
+  const bloqueadoPorAtraso = inelegivel && !adimplente;
+  const planoInativo = inelegivel && adimplente;
 
   function abrir(a: Atalho) {
     const veredito = pode(a.key);
@@ -80,10 +84,18 @@ export default function Inicio() {
           <Text style={s.sub}>Que bom ter você por aqui.</Text>
         </View>
 
-        <CartaoDigital cliente={cliente} acesso={acesso} adimplente={adimplente} />
+        <CartaoDigital
+          cliente={cliente}
+          acesso={acesso}
+          elegivel={elegivel}
+          adimplente={adimplente}
+        />
 
         {bloqueadoPorAtraso ? (
           <Aviso texto="Há uma fatura em aberto. Seus benefícios estão bloqueados até a regularização." />
+        ) : null}
+        {planoInativo ? (
+          <Aviso texto="Seu plano não está ativo no momento. Fale com a central para saber como reativar." />
         ) : null}
         {acesso === 'bloqueado' ? (
           <Aviso texto="Seu acesso ao app ainda não foi liberado. Fale com a central de atendimento." />

@@ -90,6 +90,22 @@ export async function getModulos(): Promise<Modulo[]> {
 //
 // Dependente recebe lista VAZIA por construção: `asaas_id` é NULL e não há pagamento com o
 // `cliente_id` dele. A tela trata; esta função não inventa fatura de titular.
+// ═══ BLOCO: ELEGIBILIDADE ═══
+// 16/09/2026 — a mesma régua do balcão (`fn_elegibilidade`), escopada no próprio cadastro pela
+// `fn_minha_elegibilidade`. É ela que o servidor aplica nos módulos pagos (`fn_cliente_pode`);
+// aqui serve só para a tela mostrar o estado certo. `null` = falha de rede: quem chama cai no
+// cálculo antigo pelas faturas, e o servidor continua decidindo de verdade.
+export type Elegibilidade = { elegivel: boolean; motivo: string };
+
+export async function getElegibilidade(): Promise<Elegibilidade | null> {
+  const { data, error } = await supabase.rpc('fn_minha_elegibilidade');
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  const linha = data[0] as { elegivel?: unknown; motivo?: unknown };
+  if (typeof linha.elegivel !== 'boolean') return null;
+  return { elegivel: linha.elegivel, motivo: typeof linha.motivo === 'string' ? linha.motivo : '' };
+}
+// ── FIM BLOCO ──
+
 export async function getFaturas(): Promise<Fatura[]> {
   const { data, error } = await supabase
     .from('pagamentos')
