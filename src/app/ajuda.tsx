@@ -17,7 +17,7 @@ const FAQ: { p: string; r: string }[] = [
   },
   {
     p: 'O que significa "em breve"?',
-    r: 'São serviços já contratados que ainda estão sendo ativados: agendamento, exames, telemedicina e SOS. Você será avisado quando abrirem.',
+    r: 'São serviços que ainda estão sendo ativados no app, como exames e telemedicina. Você será avisado quando abrirem.',
   },
   {
     p: 'Como cancelo o meu plano?',
@@ -25,7 +25,7 @@ const FAQ: { p: string; r: string }[] = [
   },
   {
     p: 'Como atualizo meu telefone?',
-    r: 'Fale com a central. O telefone é o seu dado de acesso ao app, então a troca passa por conferência.',
+    r: 'Fale com a central pelo WhatsApp no topo desta tela. A troca passa por conferência para proteger o seu cadastro.',
   },
 ];
 
