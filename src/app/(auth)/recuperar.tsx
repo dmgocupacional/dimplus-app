@@ -34,8 +34,8 @@ import { color, font, radius, size, space } from '@/theme/tokens';
 
 // Canal oficial, o mesmo já usado na tela de Ajuda. Não duplicar número aqui: se mudar, muda
 // em um lugar só. → src/app/ajuda.tsx
-const WHATS = '5511995192094';
-const WHATS_LEGIVEL = '(11) 99519-2094';
+const WHATS = '5511995193094';
+const WHATS_LEGIVEL = '(11) 99519-3094';
 
 type Etapa =
   | { nome: 'cpf' }

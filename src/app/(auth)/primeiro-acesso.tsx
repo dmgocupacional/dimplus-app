@@ -36,8 +36,8 @@ import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/for
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 // Canal oficial, o mesmo da tela de Ajuda e da recuperação. → src/app/ajuda.tsx
-const WHATS = '5511995192094';
-const WHATS_LEGIVEL = '(11) 99519-2094';
+const WHATS = '5511995193094';
+const WHATS_LEGIVEL = '(11) 99519-3094';
 
 function abrirWhats(assunto: string) {
   void Linking.openURL(`https://wa.me/${WHATS}?text=${encodeURIComponent(assunto)}`);

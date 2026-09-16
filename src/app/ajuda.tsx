@@ -25,7 +25,7 @@ const FAQ: { p: string; r: string }[] = [
   },
 ];
 
-const WHATSAPP = '5511995192094';
+const WHATSAPP = '5511995193094';
 
 export default function Ajuda() {
   const [aberta, setAberta] = useState<number | null>(0);
