@@ -293,6 +293,9 @@ export type SituacaoCpf =
   | { ok: true; situacao: 'sem_conta'; ativo: boolean }
   // 15/09/2026 — plano não ativo. Terminal: a saída é falar com a equipe, não corrigir campo.
   | { ok: true; situacao: 'bloqueado'; status: string }
+  // 15/09/2026 — cliente sem plano. Terminal: sem plano não dá para saber qual termo se
+  // aplica, e assinar o errado é pior que não assinar. São 84 ativos sem conta.
+  | { ok: true; situacao: 'sem_plano' }
   | { ok: true; situacao: 'nao_cliente' }
   | { ok: false; erro: string };
 
@@ -304,7 +307,7 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
       body: JSON.stringify({ cpf }),
     });
     const json = (await resp.json()) as {
-      situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente' | 'bloqueado';
+      situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente' | 'bloqueado' | 'sem_plano';
       mascara?: string;
       ativo?: boolean;
       status?: string;
@@ -315,6 +318,9 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
     }
     if (json.situacao === 'tem_email') {
       return { ok: true, situacao: 'tem_email', mascara: json.mascara ?? '' };
+    }
+    if (json.situacao === 'sem_plano') {
+      return { ok: true, situacao: 'sem_plano' };
     }
     if (json.situacao === 'bloqueado') {
       return { ok: true, situacao: 'bloqueado', status: json.status ?? '' };

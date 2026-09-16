@@ -58,7 +58,9 @@ export default function Recuperar() {
   // entrava no fluxo, preenchia e-mail e prova de identidade, e só descobria no fim — ou nem
   // descobria. Não é erro que se corrige na tela: a saída é falar com a equipe, então a tela
   // entrega o canal junto em vez de só dizer não.
-  const [bloqueado, setBloqueado] = useState(false);
+  // Dois bloqueios terminais, com textos e assuntos de WhatsApp diferentes: "plano não está
+  // ativo" e "cadastro incompleto" pedem coisas distintas da equipe.
+  const [bloqueado, setBloqueado] = useState<'plano' | 'cadastro' | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -80,7 +82,11 @@ export default function Recuperar() {
       return;
     }
     if (r.situacao === 'bloqueado') {
-      setBloqueado(true);
+      setBloqueado('plano');
+      return;
+    }
+    if (r.situacao === 'sem_plano') {
+      setBloqueado('cadastro');
       return;
     }
     if (r.situacao === 'tem_email') setEtapa({ nome: 'tem_email', mascara: r.mascara });
@@ -316,17 +322,20 @@ export default function Recuperar() {
       </ScrollView>
 
       <Modal
-        visible={bloqueado}
+        visible={!!bloqueado}
         transparent
         animationType="fade"
-        onRequestClose={() => setBloqueado(false)}
+        onRequestClose={() => setBloqueado(null)}
       >
         <View style={s.fundoModal}>
           <View style={s.caixaModal}>
-            <Text style={s.tituloModal}>Cadastro bloqueado</Text>
+            <Text style={s.tituloModal}>
+              {bloqueado === 'plano' ? 'Cadastro bloqueado' : 'Cadastro incompleto'}
+            </Text>
             <Text style={s.textoModal}>
-              O plano desse CPF não está ativo no momento, então não conseguimos liberar o
-              acesso por aqui. Fale com a nossa equipe que a gente resolve.
+              {bloqueado === 'plano'
+                ? 'O plano desse CPF não está ativo no momento, então não conseguimos liberar o acesso por aqui. Fale com a nossa equipe que a gente resolve.'
+                : 'Esse CPF é cliente DIM+, mas ainda não tem um plano vinculado no nosso sistema. Fale com a nossa equipe que a gente completa e libera o seu acesso.'}
             </Text>
             <Text style={s.telefoneModal}>{WHATS_LEGIVEL}</Text>
 
@@ -336,7 +345,9 @@ export default function Recuperar() {
                 // Mensagem pronta: a pessoa não precisa explicar de novo o que já tentou, e a
                 // equipe recebe o assunto identificado.
                 const texto = encodeURIComponent(
-                  'Olá! Tentei acessar o app do DIM+ e apareceu que o meu cadastro está bloqueado.',
+                  bloqueado === 'plano'
+                    ? 'Olá! Tentei acessar o app do DIM+ e apareceu que o meu cadastro está bloqueado.'
+                    : 'Olá! Tentei acessar o app do DIM+ e apareceu que o meu cadastro está incompleto, sem plano vinculado.',
                 );
                 void Linking.openURL(`https://wa.me/${WHATS}?text=${texto}`);
               }}
@@ -347,7 +358,7 @@ export default function Recuperar() {
             <Pressable
               style={s.link}
               onPress={() => {
-                setBloqueado(false);
+                setBloqueado(null);
                 voltarAoCpf();
               }}
             >
