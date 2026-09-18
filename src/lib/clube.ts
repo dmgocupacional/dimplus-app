@@ -13,7 +13,9 @@ import { supabase } from './supabase';
 import { chamarFeegow } from './feegowApi';
 
 /** Onde o beneficiário se autentica para ver/gerar o cartão de farmácias. */
-export const URL_CLUBE = 'https://cartaodedescontos.com.br';
+// ⚠️ COM www. O domínio puro (sem www) não responde — testado em 18/09/2026: só o www
+// devolve 200. Sem isto o botão da home abre uma página morta.
+export const URL_CLUBE = 'https://www.cartaodedescontos.com.br';
 
 export type Sexo = 'M' | 'F';
 
