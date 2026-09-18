@@ -9,6 +9,8 @@
 //
 // ⚠️ O número do cartão é lido direto da tabela (RLS deixa cada um ver só o próprio), e não
 // da rota: assim a home não depende de chamada externa para desenhar o cartão.
+import * as WebBrowser from 'expo-web-browser';
+
 import { supabase } from './supabase';
 import { chamarFeegow } from './feegowApi';
 
@@ -16,6 +18,23 @@ import { chamarFeegow } from './feegowApi';
 // ⚠️ COM www. O domínio puro (sem www) não responde — testado em 18/09/2026: só o www
 // devolve 200. Sem isto o botão da home abre uma página morta.
 export const URL_CLUBE = 'https://www.cartaodedescontos.com.br';
+
+/**
+ * Abre o clube SEM sair do app: Custom Tabs no Android, SFSafariViewController no iOS.
+ *
+ * ⚠️ Escolhido no lugar de WebView de propósito (18/09/2026). O site é de TERCEIRO e pede
+ * senha: no navegador do sistema a pessoa vê o endereço de quem está pedindo a senha, o
+ * gerenciador de senhas do celular funciona, e mudança de layout do parceiro não quebra
+ * tela nossa. WebView seria o caminho se o conteúdo fosse nosso.
+ */
+export async function abrirClube(): Promise<void> {
+  await WebBrowser.openBrowserAsync(URL_CLUBE, {
+    toolbarColor: '#202745', // navy da marca
+    controlsColor: '#FFFFFF',
+    enableBarCollapsing: true,
+    showTitle: true,
+  });
+}
 
 export type Sexo = 'M' | 'F';
 

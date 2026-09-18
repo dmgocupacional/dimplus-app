@@ -5,7 +5,6 @@ import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,7 +16,7 @@ import {
 import { CartaoClube } from '@/components/CartaoClube';
 import { CartaoDigital } from '@/components/CartaoDigital';
 import { Aviso, Card, Screen, Tile, Titulo } from '@/components/ui';
-import { URL_CLUBE } from '@/lib/clube';
+import { abrirClube } from '@/lib/clube';
 import { mensagemBloqueio } from '@/lib/gate';
 import type { ModuloKey } from '@/lib/types';
 import { useSession } from '@/state/session';
@@ -126,7 +125,7 @@ export default function Inicio() {
         </ScrollView>
 
         {clube && clube.ativa && elegivel ? (
-          <Pressable onPress={() => void Linking.openURL(URL_CLUBE)} style={s.clubeBotao}>
+          <Pressable onPress={() => void abrirClube()} style={s.clubeBotao}>
             <Ionicons name="pricetags" size={16} color={color.navy} />
             <Text style={s.clubeTxt}>Acessar o clube de descontos</Text>
           </Pressable>
@@ -187,6 +186,7 @@ export default function Inicio() {
 
 // O acesso ao clube usa login do parceiro: CPF do titular e a senha padrão informada na
 // tela do clube. O app não guarda essa senha — são credenciais de outro sistema.
+// O clube abre em navegador embutido (→ BLOCO: CLUBE DE DESCONTOS), não sai do app.
 const s = StyleSheet.create({
   carrossel: { marginHorizontal: -space.lg, paddingHorizontal: space.lg },
   clubeBotao: {
