@@ -18,6 +18,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { getCartaoClube, type CartaoClube } from '@/lib/clube';
 import { getCliente, getElegibilidade, getFaturas, getModulos, getRede } from '@/lib/data';
 import type { Elegibilidade } from '@/lib/data';
 import { buscarTermoPendente } from '@/lib/contrato';
@@ -42,6 +43,8 @@ type SessionValue = {
   adimplente: boolean;
   /** Régua única (fn_elegibilidade): decide cadeado, selo do cartão e aviso da home. */
   elegivel: boolean;
+  /** Cartão de descontos em farmácias; null = ainda não aderiu (ou falha de leitura). */
+  clube: CartaoClube | null;
   acesso: AppAcesso;
   /** true = há termo publicado esperando aceite. null = ainda não se sabe (não bloqueia). */
   aceitePendente: boolean | null;
@@ -61,6 +64,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [faturas, setFaturas] = useState<Fatura[]>([]);
   const [rede, setRede] = useState<Parceiro[]>([]);
   const [elegibilidade, setElegibilidade] = useState<Elegibilidade | null>(null);
+  const [clube, setClube] = useState<CartaoClube | null>(null);
 
   const limpar = useCallback(() => {
     setCliente(null);
@@ -68,6 +72,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setFaturas([]);
     setRede([]);
     setElegibilidade(null);
+    setClube(null);
   }, []);
 
   // Carrega tudo que a sessão atual consegue ver. Só é chamado COM sessão.
@@ -80,17 +85,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setEstado('aguardando');
       return;
     }
-    const [m, f, r, e] = await Promise.all([
+    const [m, f, r, e, cl] = await Promise.all([
       getModulos(),
       getFaturas(),
       getRede(),
       getElegibilidade(),
+      getCartaoClube(),
     ]);
     setCliente(c);
     setModulos(m);
     setFaturas(f);
     setRede(r);
     setElegibilidade(e);
+    setClube(cl);
     setEstado('pronto');
   }, [limpar]);
 
@@ -177,6 +184,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     rede,
     adimplente,
     elegivel,
+    clube,
     acesso,
     pode,
     modulo,

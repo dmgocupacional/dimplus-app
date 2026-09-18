@@ -3,10 +3,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
+import { CartaoClube } from '@/components/CartaoClube';
 import { CartaoDigital } from '@/components/CartaoDigital';
 import { Aviso, Card, Screen, Tile, Titulo } from '@/components/ui';
+import { URL_CLUBE } from '@/lib/clube';
 import { mensagemBloqueio } from '@/lib/gate';
 import type { ModuloKey } from '@/lib/types';
 import { useSession } from '@/state/session';
@@ -46,7 +57,10 @@ const ATALHOS: Atalho[] = [
 ];
 
 export default function Inicio() {
-  const { carregando, cliente, acesso, adimplente, elegivel, pode, modulo } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo } = useSession();
+  // Cartões ocupam a largura da tela menos o respiro lateral da Screen (space.lg de cada lado).
+  const { width } = useWindowDimensions();
+  const larguraCartao = width - space.lg * 2;
   const [toast, setToast] = useState<string | null>(null);
 
   if (carregando || !cliente) {
@@ -84,12 +98,39 @@ export default function Inicio() {
           <Text style={s.sub}>Que bom ter você por aqui.</Text>
         </View>
 
-        <CartaoDigital
-          cliente={cliente}
-          acesso={acesso}
-          elegivel={elegivel}
-          adimplente={adimplente}
-        />
+        {/* 16/09/2026 — carrossel: cartão DIM+ e, quando existe, o do clube de descontos.
+            Com um cartão só, o ScrollView não rola e o visual fica igual ao de antes. */}
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={s.carrossel}
+        >
+          <View style={{ width: larguraCartao }}>
+            <CartaoDigital
+              cliente={cliente}
+              acesso={acesso}
+              elegivel={elegivel}
+              adimplente={adimplente}
+            />
+          </View>
+          {clube ? (
+            <View style={{ width: larguraCartao, paddingLeft: space.md }}>
+              <CartaoClube
+                nome={cliente.nome ?? ''}
+                numero={clube.numero_cartao}
+                ativo={clube.ativa && elegivel}
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {clube && clube.ativa && elegivel ? (
+          <Pressable onPress={() => void Linking.openURL(URL_CLUBE)} style={s.clubeBotao}>
+            <Ionicons name="pricetags" size={16} color={color.navy} />
+            <Text style={s.clubeTxt}>Acessar o clube de descontos</Text>
+          </Pressable>
+        ) : null}
 
         {bloqueadoPorAtraso ? (
           <Aviso texto="Há uma fatura em aberto. Seus benefícios estão bloqueados até a regularização." />
@@ -144,7 +185,21 @@ export default function Inicio() {
   );
 }
 
+// O acesso ao clube usa login do parceiro: CPF do titular e a senha padrão informada na
+// tela do clube. O app não guarda essa senha — são credenciais de outro sistema.
 const s = StyleSheet.create({
+  carrossel: { marginHorizontal: -space.lg, paddingHorizontal: space.lg },
+  clubeBotao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    marginTop: space.md,
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: color.greenBg,
+  },
+  clubeTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
   load: { paddingTop: 80, alignItems: 'center' },
   saudacao: { marginBottom: space.lg },
   ola: { fontFamily: font.black, fontSize: size.xxl, color: color.ink },

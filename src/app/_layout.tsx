@@ -24,6 +24,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErroBoundary } from '@/components/ErroBoundary';
+import { clubeDispensado } from '@/lib/clube';
 import { SessionProvider, useSession } from '@/state/session';
 import { color } from '@/theme/tokens';
 
@@ -43,7 +44,7 @@ function Splash() {
 }
 
 function Roteador() {
-  const { estado, aceitePendente } = useSession();
+  const { estado, aceitePendente, clube } = useSession();
   const segments = useSegments();
   const router = useRouter();
 
@@ -91,9 +92,19 @@ function Roteador() {
       return;
     }
 
+    // 16/09/2026 — CLUBE DE DESCONTOS, a trava seguinte ao termo.
+    // Mesma lógica do aceite e pelo mesmo motivo: só bloqueia com certeza. `clube === null`
+    // pode ser "não aderiu" OU falha de leitura, e a tela tem "Agora não" para o segundo
+    // caso — por isso ela não repete o `return` do aceite: quem dispensou segue usando o app
+    // nesta sessão e volta a ver a trava no próximo carregamento.
+    if (clube === null && partes[0] !== 'clube' && !clubeDispensado()) {
+      router.replace('/clube' as never);
+      return;
+    }
+
     // pronto
     if (emAuth) router.replace('/' as never);
-  }, [estado, aceitePendente, segments, router]);
+  }, [estado, aceitePendente, clube, segments, router]);
 
   if (estado === 'carregando') return <Splash />;
 
