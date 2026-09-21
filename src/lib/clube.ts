@@ -15,10 +15,12 @@ import { Linking } from 'react-native';
 import { supabase } from './supabase';
 import { chamarFeegow } from './feegowApi';
 
-/** Onde o beneficiário se autentica para ver/gerar o cartão de farmácias. */
-// ⚠️ COM www. O domínio puro (sem www) não responde — testado em 18/09/2026: só o www
-// devolve 200. Sem isto o botão da home abre uma página morta.
-export const URL_CLUBE = 'https://www.cartaodedescontos.com.br';
+/** Onde o beneficiário se cadastra no clube e gera o cartão Vidalink. */
+// 21/09/2026: portal WHITE-LABEL que o Dr. Achei montou para a DIMEG, no nosso domínio.
+// Até aqui apontava para o cartaodedescontos.com.br genérico — destino errado, identificado
+// em 18/09 e só corrigido agora. Provisório até a API white-label (cadastro e cartão por
+// dentro do app) ser liberada pelo José.
+export const URL_CLUBE = 'https://portal.dimmsaude.com.br/login';
 
 /**
  * Abre o clube SEM sair do app: Custom Tabs no Android, SFSafariViewController no iOS.
@@ -68,18 +70,21 @@ export interface CartaoClube {
   numero_cartao: string | null;
   plano_nome: string | null;
   ativa: boolean;
+  /** Número do cartão Vidalink informado pela pessoa. `null` = ainda não gerou. */
+  cartao_vidalink: string | null;
 }
 
 export async function getCartaoClube(): Promise<CartaoClube | null> {
   const { data, error } = await supabase
     .from('drachei_assinaturas')
-    .select('numero_cartao, plano_nome, status')
+    .select('numero_cartao, plano_nome, status, cartao_vidalink')
     .maybeSingle();
   if (error || !data) return null;
   return {
     numero_cartao: data.numero_cartao,
     plano_nome: data.plano_nome,
     ativa: data.status === 'ativa',
+    cartao_vidalink: data.cartao_vidalink ?? null,
   };
 }
 
@@ -97,5 +102,19 @@ export async function aderirClube(dados: {
   );
   if (r.ok) return { ok: true, numero_cartao: r.dados.numero_cartao };
   return { ok: false, mensagem: r.mensagem };
+}
+
+/**
+ * Grava o número do cartão Vidalink gerado no portal. PROVISÓRIO: sem API da Vidalink, o
+ * número não é conferido na origem — vale o que a pessoa informou.
+ */
+export async function informarVidalink(
+  numero: string,
+): Promise<{ ok: true } | { ok: false; mensagem: string }> {
+  const r = await chamarFeegow<{ cartao_vidalink: string }>('/api/app/drachei/vidalink', {
+    method: 'POST',
+    body: { numero },
+  });
+  return r.ok ? { ok: true } : { ok: false, mensagem: r.mensagem };
 }
 // ── FIM BLOCO ──

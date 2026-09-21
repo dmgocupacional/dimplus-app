@@ -16,7 +16,6 @@ import {
 import { CartaoClube } from '@/components/CartaoClube';
 import { CartaoDigital } from '@/components/CartaoDigital';
 import { Aviso, Card, Screen, Tile, Titulo } from '@/components/ui';
-import { abrirClube } from '@/lib/clube';
 import { mensagemBloqueio } from '@/lib/gate';
 import type { ModuloKey } from '@/lib/types';
 import { useSession } from '@/state/session';
@@ -30,7 +29,9 @@ type Atalho = {
 };
 
 const ATALHOS: Atalho[] = [
-  { key: 'rede', rotulo: 'Rede parceira', icone: 'location', rota: '/rede' },
+  // 21/09/2026: "Rede parceira" saiu do acesso rápido (a aba Rede continua na barra) e deu
+  // lugar ao clube. `/clube` decide a etapa pelo estado: adesão, cartão Vidalink ou pronto.
+  { key: 'clube', rotulo: 'Clube de descontos', icone: 'pricetags', rota: '/clube' },
   { key: 'financeiro', rotulo: 'Financeiro', icone: 'receipt', rota: '/financeiro' },
   // ✅ 19/08/2026 (S2-L3): tela `/agendar` existe. Mesmo raciocínio do `exames` (18/08):
   // a flag `agendamento` já está `ativo=true` em produção — `rota: null` deixaria este
@@ -97,7 +98,8 @@ export default function Inicio() {
           <Text style={s.sub}>Que bom ter você por aqui.</Text>
         </View>
 
-        {/* 16/09/2026 — carrossel: cartão DIM+ e, quando existe, o do clube de descontos.
+        {/* Carrossel: cartão DIM+ e, ao lado, o cartão Vidalink de farmácia (21/09/2026).
+            Com assinatura sem Vidalink, o segundo cartão aparece PENDENTE e leva à geração.
             Com um cartão só, o ScrollView não rola e o visual fica igual ao de antes. */}
         <ScrollView
           horizontal
@@ -115,21 +117,16 @@ export default function Inicio() {
           </View>
           {clube ? (
             <View style={{ width: larguraCartao, paddingLeft: space.md }}>
-              <CartaoClube
-                nome={cliente.nome ?? ''}
-                numero={clube.numero_cartao}
-                ativo={clube.ativa && elegivel}
-              />
+              <Pressable onPress={() => router.push('/clube' as never)}>
+                <CartaoClube
+                  nome={cliente.nome ?? ''}
+                  numero={clube.cartao_vidalink}
+                  ativo={clube.ativa && elegivel}
+                />
+              </Pressable>
             </View>
           ) : null}
         </ScrollView>
-
-        {clube && clube.ativa && elegivel ? (
-          <Pressable onPress={() => void abrirClube()} style={s.clubeBotao}>
-            <Ionicons name="pricetags" size={16} color={color.navy} />
-            <Text style={s.clubeTxt}>Acessar o clube de descontos</Text>
-          </Pressable>
-        ) : null}
 
         {bloqueadoPorAtraso ? (
           <Aviso texto="Há uma fatura em aberto. Seus benefícios estão bloqueados até a regularização." />
@@ -184,22 +181,8 @@ export default function Inicio() {
   );
 }
 
-// O acesso ao clube usa login do parceiro: CPF do titular e a senha padrão informada na
-// tela do clube. O app não guarda essa senha — são credenciais de outro sistema.
-// O clube abre em navegador embutido (→ BLOCO: CLUBE DE DESCONTOS), não sai do app.
 const s = StyleSheet.create({
   carrossel: { marginHorizontal: -space.lg, paddingHorizontal: space.lg },
-  clubeBotao: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
-    marginTop: space.md,
-    paddingVertical: space.md,
-    borderRadius: radius.pill,
-    backgroundColor: color.greenBg,
-  },
-  clubeTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
   load: { paddingTop: 80, alignItems: 'center' },
   saudacao: { marginBottom: space.lg },
   ola: { fontFamily: font.black, fontSize: size.xxl, color: color.ink },

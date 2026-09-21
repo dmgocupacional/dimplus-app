@@ -6,10 +6,11 @@
 /** clientes.app_acesso — default no banco é 'bloqueado'. */
 export type AppAcesso = 'liberado' | 'suspenso' | 'bloqueado';
 
-/** Chaves de app_features. São 8, fixas. */
+/** Chaves de app_features. São 9, fixas (`clube` entrou em 21/09/2026). */
 export type ModuloKey =
   | 'cartao'
   | 'rede'
+  | 'clube'
   | 'financeiro'
   | 'ajuda'
   | 'agendamento'

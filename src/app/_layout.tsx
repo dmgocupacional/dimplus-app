@@ -97,7 +97,10 @@ function Roteador() {
     // pode ser "não aderiu" OU falha de leitura, e a tela tem "Agora não" para o segundo
     // caso — por isso ela não repete o `return` do aceite: quem dispensou segue usando o app
     // nesta sessão e volta a ver a trava no próximo carregamento.
-    if (clube === null && partes[0] !== 'clube' && !clubeDispensado()) {
+    // 21/09/2026: o cartão Vidalink faz parte da mesma trava — sem ele não há desconto em
+    // farmácia. Só com a assinatura ATIVA (inativa é caso financeiro, não de cadastro).
+    const faltaVidalink = !!clube && clube.ativa && !clube.cartao_vidalink;
+    if ((clube === null || faltaVidalink) && partes[0] !== 'clube' && !clubeDispensado()) {
       router.replace('/clube' as never);
       return;
     }

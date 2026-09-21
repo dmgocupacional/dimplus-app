@@ -1,5 +1,7 @@
 // ═══ BLOCO: CARTÃO DO CLUBE DE DESCONTOS ═══
 // 16/09/2026. Segundo cartão do carrossel da home: descontos em farmácias conveniadas.
+// 21/09/2026: passou a ser o cartão VIDALINK (número informado pela pessoa após gerar no
+// portal). Sem número = PENDENTE, e o toque (na home) leva à tela que gera o cartão.
 // Sem lógica de negócio — recebe número e estado já decididos. → BLOCO: SESSÃO
 //
 // ⚠️ Visual deliberadamente diferente do cartão DIM+ (verde da marca em vez de navy): num
@@ -29,10 +31,14 @@ export function CartaoClube({
 
       <View style={s.topo}>
         <View>
-          <Text style={s.rotulo}>CLUBE DE DESCONTOS</Text>
-          <Text style={s.titulo}>Farmácias</Text>
+          <Text style={s.rotulo}>CARTÃO DE FARMÁCIA</Text>
+          <Text style={s.titulo}>Vidalink</Text>
         </View>
-        <Pill texto={ativo ? 'ativo' : 'inativo'} tom={ativo ? 'ok' : 'erro'} />
+        {numero ? (
+          <Pill texto={ativo ? 'ativo' : 'inativo'} tom={ativo ? 'ok' : 'erro'} />
+        ) : (
+          <Pill texto="pendente" tom="aviso" />
+        )}
       </View>
 
       <View style={s.meio}>
@@ -48,7 +54,9 @@ export function CartaoClube({
       </View>
 
       <View style={s.rodape}>
-        <Text style={s.rodapeTxt}>Apresente na farmácia conveniada</Text>
+        <Text style={s.rodapeTxt}>
+          {numero ? 'Apresente na farmácia conveniada' : 'Toque para gerar seu cartão'}
+        </Text>
       </View>
     </View>
   );
