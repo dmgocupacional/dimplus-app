@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -56,12 +56,24 @@ const ATALHOS: Atalho[] = [
   { key: 'ajuda', rotulo: 'Ajuda', icone: 'help-circle', rota: '/ajuda' },
 ];
 
+/** Quanto do 2º cartão fica à mostra, para indicar que o carrossel desliza. */
+const ESPIADA = 28;
+
 export default function Inicio() {
   const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo } = useSession();
-  // Cartões ocupam a largura da tela menos o respiro lateral da Screen (space.lg de cada lado).
   const { width } = useWindowDimensions();
-  const larguraCartao = width - space.lg * 2;
   const [toast, setToast] = useState<string | null>(null);
+  // ═══ BLOCO: CARROSSEL DE CARTÕES ═══
+  // 21/09/2026: o carrossel não se mostrava — o 1º cartão ocupava a tela toda, sem marcador,
+  // e o pagingEnabled (pula a largura da TELA) parava o 2º cartão torto. Agora: o cartão fica
+  // ESPIADA px mais estreito para a borda do seguinte aparecer, o snap é pela largura exata
+  // do cartão e há pontos + nome do cartão visível. Com um cartão só, nada disso aparece.
+  const carrosselRef = useRef<ScrollView>(null);
+  const [pagina, setPagina] = useState(0);
+  const temClube = !!clube;
+  const larguraCartao = width - space.lg * 2 - (temClube ? ESPIADA : 0);
+  const passo = larguraCartao + space.md;
+  // ── FIM BLOCO ──
 
   if (carregando || !cliente) {
     return (
@@ -102,10 +114,21 @@ export default function Inicio() {
             Com assinatura sem Vidalink, o segundo cartão aparece PENDENTE e leva à geração.
             Com um cartão só, o ScrollView não rola e o visual fica igual ao de antes. */}
         <ScrollView
+          ref={carrosselRef}
           horizontal
-          pagingEnabled
+          scrollEnabled={temClube}
+          snapToInterval={passo}
+          decelerationRate="fast"
+          disableIntervalMomentum
           showsHorizontalScrollIndicator={false}
           style={s.carrossel}
+          // paddingRight com a espiada: sem ela o 2º cartão nunca chegaria ao ponto de snap.
+          contentContainerStyle={{ paddingLeft: space.lg, paddingRight: space.lg + (temClube ? ESPIADA : 0) }}
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            const p = Math.min(1, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / passo)));
+            if (p !== pagina) setPagina(p);
+          }}
         >
           <View style={{ width: larguraCartao }}>
             <CartaoDigital
@@ -116,7 +139,7 @@ export default function Inicio() {
             />
           </View>
           {clube ? (
-            <View style={{ width: larguraCartao, paddingLeft: space.md }}>
+            <View style={{ width: larguraCartao, marginLeft: space.md }}>
               <Pressable onPress={() => router.push('/clube' as never)}>
                 <CartaoClube
                   nome={cliente.nome ?? ''}
@@ -127,6 +150,24 @@ export default function Inicio() {
             </View>
           ) : null}
         </ScrollView>
+
+        {temClube ? (
+          <View style={s.paginacao}>
+            <Text style={s.paginaNome}>{pagina === 0 ? 'Cartão DIM+' : 'Cartão de farmácia'}</Text>
+            <View style={s.pontos}>
+              {[0, 1].map((i) => (
+                <Pressable
+                  key={i}
+                  hitSlop={10}
+                  accessibilityLabel={i === 0 ? 'Ver cartão DIM+' : 'Ver cartão de farmácia'}
+                  onPress={() => carrosselRef.current?.scrollTo({ x: i * passo, animated: true })}
+                >
+                  <View style={[s.ponto, pagina === i && s.pontoAtivo]} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         {bloqueadoPorAtraso ? (
           <Aviso texto="Há uma fatura em aberto. Seus benefícios estão bloqueados até a regularização." />
@@ -182,7 +223,12 @@ export default function Inicio() {
 }
 
 const s = StyleSheet.create({
-  carrossel: { marginHorizontal: -space.lg, paddingHorizontal: space.lg },
+  carrossel: { marginHorizontal: -space.lg },
+  paginacao: { alignItems: 'center', marginTop: space.sm, marginBottom: space.xs },
+  paginaNome: { fontFamily: font.bold, fontSize: size.xs, color: color.ink3, letterSpacing: 0.5 },
+  pontos: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  ponto: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.border },
+  pontoAtivo: { width: 18, backgroundColor: color.navy },
   load: { paddingTop: 80, alignItems: 'center' },
   saudacao: { marginBottom: space.lg },
   ola: { fontFamily: font.black, fontSize: size.xxl, color: color.ink },

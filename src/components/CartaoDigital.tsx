@@ -6,7 +6,7 @@ import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Pill } from '@/components/ui';
-import { formatMesAno, maskCPF } from '@/lib/format';
+import { formatCPF, formatMesAno } from '@/lib/format';
 import { rotuloEstadoPlano } from '@/lib/gate';
 import type { AppAcesso, Cliente } from '@/lib/types';
 import { color, font, radius, size, space } from '@/theme/tokens';
@@ -46,7 +46,9 @@ export function CartaoDigital({
         <Text style={s.nome} numberOfLines={1}>
           {cliente.nome}
         </Text>
-        <Text style={s.cpf}>{maskCPF(cliente.cpf)}</Text>
+        {/* 21/09/2026: CPF COMPLETO (decisão do Henrique) — o cartão só aparece para o
+            próprio titular logado, e é o documento que a pessoa apresenta. */}
+        <Text style={s.cpf}>{formatCPF(cliente.cpf)}</Text>
       </View>
 
       <View style={s.base}>
