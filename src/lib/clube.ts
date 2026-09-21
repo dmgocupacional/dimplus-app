@@ -9,7 +9,8 @@
 //
 // ⚠️ O número do cartão é lido direto da tabela (RLS deixa cada um ver só o próprio), e não
 // da rota: assim a home não depende de chamada externa para desenhar o cartão.
-import * as WebBrowser from 'expo-web-browser';
+import { requireOptionalNativeModule } from 'expo';
+import { Linking } from 'react-native';
 
 import { supabase } from './supabase';
 import { chamarFeegow } from './feegowApi';
@@ -27,7 +28,21 @@ export const URL_CLUBE = 'https://www.cartaodedescontos.com.br';
  * gerenciador de senhas do celular funciona, e mudança de layout do parceiro não quebra
  * tela nossa. WebView seria o caminho se o conteúdo fosse nosso.
  */
+//
+// 🔴 NÃO importar `expo-web-browser` no topo (21/09/2026). Ele é módulo NATIVO e faz
+// `requireNativeModule('ExpoWebBrowser')` na carga: num binário compilado antes dele (dev build
+// 94aa9f8d, de 11/09), a OTA com o import fixo derrubou o app INTEIRO na abertura, porque a
+// runtimeVersion (sdkVersion) não distingue binários com módulos nativos diferentes. Aqui o
+// módulo só é carregado se existir no binário; senão, o clube abre no navegador do sistema.
+const temNavegadorEmbutido = requireOptionalNativeModule('ExpoWebBrowser') != null;
+
 export async function abrirClube(): Promise<void> {
+  if (!temNavegadorEmbutido) {
+    await Linking.openURL(URL_CLUBE);
+    return;
+  }
+  // require tardio de propósito: só avalia o pacote quando o módulo nativo existe.
+  const WebBrowser = require('expo-web-browser') as typeof import('expo-web-browser');
   await WebBrowser.openBrowserAsync(URL_CLUBE, {
     toolbarColor: '#202745', // navy da marca
     controlsColor: '#FFFFFF',
