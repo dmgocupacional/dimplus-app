@@ -17,19 +17,35 @@
 // → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts)
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { abrirClube, abrirForaDoApp, pedirLinkClube, temWebView } from '@/lib/clube';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
+// User-agent do navegador do sistema, SEM o marcador `wv`/WebView: é por ele que o reCAPTCHA
+// separa navegador de app embutido. Mantém versões realistas — um UA inventado é pior que
+// o padrão.
+const UA_NAVEGADOR =
+  Platform.OS === 'ios'
+    ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+    : 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
+
 // Domínios em que a navegação continua dentro da tela. O resto vai para fora.
 const DOMINIOS_DO_CLUBE = ['cartaodedescontos.com.br', 'drachei.com.br', 'dimmsaude.com.br'];
+
+// reCAPTCHA pode abrir o desafio como janela; com `setSupportMultipleWindows={false}` ela
+// carrega AQUI como página principal. Só os caminhos do reCAPTCHA — o google.com em geral
+// continua indo para fora, senão a tela vira navegador de busca.
+function ehRecaptcha(url: string): boolean {
+  return /^https:\/\/(www\.)?(google\.com|recaptcha\.net)\/recaptcha\//i.test(url)
+    || /^https:\/\/(www\.)?gstatic\.com\/recaptcha\//i.test(url);
+}
 
 function ehDoClube(url: string): boolean {
   const m = /^https:\/\/([^/?#]+)/i.exec(url);
   if (!m) return false;
   const host = m[1].toLowerCase();
-  return DOMINIOS_DO_CLUBE.some((d) => host === d || host.endsWith(`.${d}`));
+  return DOMINIOS_DO_CLUBE.some((d) => host === d || host.endsWith(`.${d}`)) || ehRecaptcha(url);
 }
 
 type Estado =
@@ -101,9 +117,24 @@ export default function ClubeWeb() {
           abrirForaDoApp(req.url);
           return false;
         }}
-        setSupportMultipleWindows={false}
+        // ═══ PARIDADE COM O NAVEGADOR (23/09/2026) ═══
+        // O clube funcionava no navegador embutido; aqui tem de funcionar igual. O reCAPTCHA
+        // do parceiro pontua o ambiente e desconfia de WebView — então a tela se apresenta e
+        // se comporta como o navegador do sistema, em vez de esconder ou remover a proteção
+        // deles (que o servidor do clube confere, e sem ela a função é recusada).
+        userAgent={UA_NAVEGADOR}
+        // Android bloqueia cookie de terceiro por padrão em WebView; o reCAPTCHA vive dele.
+        thirdPartyCookiesEnabled
+        // iOS: compartilha o cookie store com o sistema, como o navegador faz.
         sharedCookiesEnabled
+        // window.open do site (desafio do reCAPTCHA, comprovantes) abre nesta mesma tela.
+        setSupportMultipleWindows={false}
+        javaScriptCanOpenWindowsAutomatically
+        javaScriptEnabled
         domStorageEnabled
+        cacheEnabled
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback
         startInLoadingState={false}
         allowsBackForwardNavigationGestures
         pullToRefreshEnabled
