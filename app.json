@@ -8,7 +8,7 @@
     "scheme": "dimplus",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "br.com.dimmsaude.app",
+      "package": "com.javenessi.dimmsaude",
       "adaptiveIcon": {
         "backgroundColor": "#202745",
         "foregroundImage": "./assets/brand/icon-adaptive.png"
