@@ -114,6 +114,11 @@ function Roteador() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      {/* 23/09/2026 — clube em WebView com o cabeçalho do DIM+: é o que faz parecer nativo. */}
+      <Stack.Screen
+        name="clube-web"
+        options={{ headerShown: true, title: 'Clube de descontos', headerTintColor: color.navy, headerBackTitle: 'Voltar' }}
+      />
       <Stack.Screen name="(auth)" />
       <Stack.Screen
         name="ajuda"

@@ -27,6 +27,7 @@ import {
   aderirClube,
   dispensarClubePorAgora,
   informarVidalink,
+  temWebView,
   type DadosAdesao,
   type Sexo,
 } from '@/lib/clube';
@@ -205,6 +206,11 @@ function BotaoClube({ rotulo, secundario }: { rotulo: string; secundario?: boole
 
   async function abrir() {
     if (abrindo) return;
+    // Com WebView no binário, o clube é uma tela do app; a própria tela pede o link.
+    if (temWebView) {
+      router.push('/clube-web' as never);
+      return;
+    }
     setAbrindo(true);
     setErro(null);
     const r = await abrirClube();

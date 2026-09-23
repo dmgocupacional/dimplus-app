@@ -9,7 +9,7 @@
 // ⚠️ O número do cartão é lido direto da tabela (RLS deixa cada um ver só o próprio), e não
 // da rota: assim a home não depende de chamada externa para desenhar o cartão.
 import { requireOptionalNativeModule } from 'expo';
-import { Linking } from 'react-native';
+import { Linking, TurboModuleRegistry } from 'react-native';
 
 import { supabase } from './supabase';
 import { chamarFeegow } from './feegowApi';
@@ -36,6 +36,17 @@ export const URL_CLUBE = 'https://portal.dimmsaude.com.br/login';
 // runtimeVersion (sdkVersion) não distingue binários com módulos nativos diferentes. Aqui o
 // módulo só é carregado se existir no binário; senão, o clube abre no navegador do sistema.
 const temNavegadorEmbutido = requireOptionalNativeModule('ExpoWebBrowser') != null;
+
+/**
+ * 23/09/2026 — o clube passou a abrir em WEBVIEW, como tela do próprio app (decisão do
+ * Henrique). Só possível porque o link já vem autenticado: não há senha a digitar, que era o
+ * motivo de o navegador embutido ter sido preferido em 18/09.
+ *
+ * 🔴 Mesma regra do expo-web-browser: `react-native-webview` é NATIVO e chegou num binário
+ * novo. Import fixo num binário antigo derruba o app inteiro na abertura, e a runtimeVersion
+ * não distingue os binários. Aqui só se sabe se ele existe; quem importa é a tela, tarde.
+ */
+export const temWebView = TurboModuleRegistry.get('RNCWebViewModule') != null;
 
 /** Abre qualquer URL no navegador embutido, ou no do sistema se o binário não tiver o módulo. */
 async function abrirUrl(url: string): Promise<void> {
@@ -65,11 +76,28 @@ export type ResultadoAbrir = { ok: true } | { ok: false; mensagem: string };
  * Sem link (parceiro fora do ar, cadastro pendente lá) o app NÃO cai no portal genérico:
  * lá a pessoa teria de criar outra conta, que é justamente o que este fluxo elimina.
  */
-export async function abrirClube(): Promise<ResultadoAbrir> {
+/** Pede ao erp um link de sessão novo. Quem chama usa uma vez e descarta. */
+export async function pedirLinkClube(): Promise<{ ok: true; url: string } | { ok: false; mensagem: string }> {
   const r = await chamarFeegow<{ url: string }>('/api/app/drachei/clube', { method: 'POST', body: {} });
   if (!r.ok) return { ok: false, mensagem: r.mensagem };
-  await abrirUrl(r.dados.url);
+  return { ok: true, url: r.dados.url };
+}
+
+/**
+ * Caminho para binário SEM WebView: abre no navegador embutido. Com WebView, a tela
+ * `/clube-web` chama `pedirLinkClube` ela mesma — assim o link nunca trafega por parâmetro de
+ * rota, que fica no histórico de navegação.
+ */
+export async function abrirClube(): Promise<ResultadoAbrir> {
+  const r = await pedirLinkClube();
+  if (!r.ok) return r;
+  await abrirUrl(r.url);
   return { ok: true };
+}
+
+/** Links que saem do clube (telefone, mapa, outro site) vão para fora do app. */
+export function abrirForaDoApp(url: string): void {
+  void Linking.openURL(url);
 }
 
 /**
