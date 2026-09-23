@@ -15,8 +15,8 @@
 // transformaria a tela do DIM+ num navegador genérico. A regra vale SÓ para o quadro principal:
 // iframes (reCAPTCHA, mapa, pagamento) fazem parte da página e carregam normalmente.
 // → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts)
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { abrirClube, abrirForaDoApp, pedirLinkClube, temWebView } from '@/lib/clube';
@@ -29,6 +29,15 @@ const UA_NAVEGADOR =
   Platform.OS === 'ios'
     ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
     : 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
+
+// ═══ DESTINOS DENTRO DO CLUBE (23/09/2026) ═══
+// O link autenticado sempre cai no login do clube. Para abrir já numa seção, a tela espera o
+// login concluir e, na PRIMEIRA página logada, navega para o destino. Caminho informado pelo
+// Henrique a partir do site em produção — não descoberto por sondagem.
+// Só nomes curtos trafegam na rota; o endereço fica aqui, e o token nunca sai da tela.
+const DESTINOS: Record<string, string> = {
+  farmacia: 'https://www.cartaodedescontos.com.br/cartao-farmacia',
+};
 
 // Domínios em que a navegação continua dentro da tela. O resto vai para fora.
 const DOMINIOS_DO_CLUBE = ['cartaodedescontos.com.br', 'drachei.com.br', 'dimmsaude.com.br'];
@@ -54,8 +63,12 @@ type Estado =
   | { fase: 'erro'; mensagem: string };
 
 export default function ClubeWeb() {
+  const { destino } = useLocalSearchParams<{ destino?: string }>();
+  const alvo = destino ? DESTINOS[destino] : undefined;
   const [estado, setEstado] = useState<Estado>({ fase: 'pedindo' });
   const [carregandoPagina, setCarregandoPagina] = useState(true);
+  // Garante um único salto para o destino: depois dele, a pessoa navega livre pelo clube.
+  const jaSaltou = useRef(false);
 
   async function pedir() {
     setEstado({ fase: 'pedindo' });
@@ -104,6 +117,18 @@ export default function ClubeWeb() {
         style={s.web}
         onLoadStart={() => setCarregandoPagina(true)}
         onLoadEnd={() => setCarregandoPagina(false)}
+        onNavigationStateChange={(nav) => {
+          // Login concluído = primeira página do clube que já não é a de login. Aí, e só uma
+          // vez, troca a origem para o destino pedido.
+          if (!alvo || jaSaltou.current || nav.loading) return;
+          if (!ehDoClube(nav.url) || /\/login(\b|\?|$)/i.test(nav.url)) return;
+          if (nav.url.startsWith(alvo)) {
+            jaSaltou.current = true;
+            return;
+          }
+          jaSaltou.current = true;
+          setEstado({ fase: 'pronto', url: alvo });
+        }}
         onError={() => setEstado({ fase: 'erro', mensagem: 'O site do clube não respondeu.' })}
         onShouldStartLoadWithRequest={(req) => {
           // 🔴 QUADROS EMBUTIDOS SEMPRE CARREGAM (bug de 23/09/2026). O site do clube usa

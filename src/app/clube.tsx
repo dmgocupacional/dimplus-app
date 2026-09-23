@@ -200,7 +200,16 @@ function PassoAdesao() {
 }
 
 /** Botão que abre o clube já autenticado e mostra o motivo se o parceiro recusar. */
-function BotaoClube({ rotulo, secundario }: { rotulo: string; secundario?: boolean }) {
+function BotaoClube({
+  rotulo,
+  secundario,
+  destino,
+}: {
+  rotulo: string;
+  secundario?: boolean;
+  /** Seção do clube para abrir direto (ver DESTINOS em clube-web.tsx). */
+  destino?: 'farmacia';
+}) {
   const [abrindo, setAbrindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -208,7 +217,7 @@ function BotaoClube({ rotulo, secundario }: { rotulo: string; secundario?: boole
     if (abrindo) return;
     // Com WebView no binário, o clube é uma tela do app; a própria tela pede o link.
     if (temWebView) {
-      router.push('/clube-web' as never);
+      router.push((destino ? `/clube-web?destino=${destino}` : '/clube-web') as never);
       return;
     }
     setAbrindo(true);
@@ -268,8 +277,8 @@ function PassoVidalink() {
             em dois passos:
           </Text>
 
-          <Text style={s.passo}>1. Abra o clube (você já entra conectado) e gere o cartão.</Text>
-          <BotaoClube rotulo="Abrir o clube" secundario />
+          <Text style={s.passo}>1. Toque abaixo e informe a sua data de nascimento para gerar o cartão.</Text>
+          <BotaoClube rotulo="Gerar meu cartão de farmácia" secundario destino="farmacia" />
 
           <Text style={s.passo}>2. Volte aqui e digite o número do cartão gerado.</Text>
           <TextInput
@@ -317,7 +326,8 @@ function ClubePronto({ numero }: { numero: string }) {
           </Text>
           <Text style={s.rotulo}>Nº DO CARTÃO</Text>
           <Text style={s.numero}>{numero.replace(/(.{4})/g, '$1 ').trim()}</Text>
-          <BotaoClube rotulo="Abrir o clube" />
+          <BotaoClube rotulo="Farmácias próximas" destino="farmacia" />
+          <BotaoClube rotulo="Abrir o clube de descontos" secundario />
         </Card>
       </ScrollView>
     </Screen>
