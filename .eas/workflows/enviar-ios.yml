@@ -1,0 +1,27 @@
+# Envia para a loja o ULTIMO build de producao (ios) ja concluido no EAS.
+#
+# Existe porque o envio direto pelo conector do Expo e recusado com
+# "conflict between exclusive peers [appleAppSpecificPassword, ascApiKey, ascApiKeyId]"
+# mesmo sem senha de app cadastrada: o problema e do pedido montado pelo conector.
+# Como workflow, o envio usa as credenciais guardadas no EAS e o perfil production do
+# eas.json, igual ao eas submit do terminal.
+#
+# Sem entradas de proposito: o disparo pelo conector nao aceita parametros. O build e
+# escolhido pelo get-build (o mais recente de producao desta plataforma). Rodar logo
+# depois de o build terminar, para nao enviar um build anterior por engano.
+name: Enviar ios para a loja
+
+jobs:
+  achar_build:
+    name: Achar o ultimo build de producao
+    type: get-build
+    params:
+      platform: ios
+      profile: production
+  enviar:
+    name: Enviar para a loja
+    needs: [achar_build]
+    type: submit
+    params:
+      build_id: ${{ needs.achar_build.outputs.build_id }}
+      profile: production
