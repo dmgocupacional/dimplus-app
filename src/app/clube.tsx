@@ -41,7 +41,9 @@ const OPCOES: { valor: Sexo; rotulo: string }[] = [
 
 export default function AdesaoClube() {
   const { clube } = useSession();
-  if (clube && clube.cartao_vidalink) return <ClubePronto numero={clube.cartao_vidalink} />;
+  if (clube && clube.cartao_vidalink) {
+    return <ClubePronto numero={clube.cartao_vidalink} validade={clube.vidalink_validade} />;
+  }
   if (clube) return <PassoVidalink />;
   return <PassoAdesao />;
 }
@@ -319,7 +321,10 @@ function PassoVidalink() {
   );
 }
 
-function ClubePronto({ numero }: { numero: string }) {
+function ClubePronto({ numero, validade }: { numero: string; validade: string | null }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const vencido = !!validade && validade.slice(0, 10) < hoje;
+  const validadeBr = validade ? validade.slice(0, 10).split('-').reverse().join('/') : null;
   return (
     <Screen titulo="Clube de descontos">
       <ScrollView contentContainerStyle={s.conteudo}>
@@ -335,6 +340,13 @@ function ClubePronto({ numero }: { numero: string }) {
               ? numero.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
               : numero.replace(/(.{4})/g, '$1 ').trim()}
           </Text>
+          {validadeBr ? (
+            <Text style={vencido ? s.validadeVencida : s.nota}>
+              {vencido
+                ? `Cartão vencido em ${validadeBr}. Abra o clube para reativar.`
+                : `Válido até ${validadeBr}. Para manter ativo, continue acessando o clube.`}
+            </Text>
+          ) : null}
           <BotaoClube rotulo="Farmácias próximas" destino="farmacia" />
           <BotaoClube rotulo="Abrir o clube de descontos" secundario />
         </Card>
@@ -365,6 +377,12 @@ const s = StyleSheet.create({
   opcaoAtiva: { borderColor: color.navy, backgroundColor: color.offwhite },
   opcaoTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.ink2 },
   opcaoTxtAtivo: { color: color.navy },
+  validadeVencida: {
+    fontFamily: font.bold,
+    fontSize: size.xs,
+    color: color.danger,
+    marginTop: space.md,
+  },
   nota: { fontFamily: font.regular, fontSize: size.xs, color: color.ink3, marginTop: space.md },
   botao: {
     marginTop: space.xl,

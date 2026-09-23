@@ -179,6 +179,7 @@ export default function Inicio() {
                   nome={cliente.nome ?? ''}
                   numero={clube.cartao_vidalink}
                   ativo={clube.ativa && elegivel}
+                  validade={clube.vidalink_validade}
                 />
               </Pressable>
             </View>

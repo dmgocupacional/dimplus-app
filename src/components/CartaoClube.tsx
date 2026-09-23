@@ -24,15 +24,36 @@ function agruparCartaoEmBlocos(n: string): string {
   return n.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
+/** AAAA-MM-DD → DD/MM/AAAA */
+function dataBr(iso: string): string {
+  const [a, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${a}`;
+}
+
 export function CartaoClube({
   nome,
   numero,
   ativo,
+  validade,
 }: {
   nome: string;
   numero: string | null;
   ativo: boolean;
+  /** Validade do Vidalink lida do clube (AAAA-MM-DD). Sem ela, o rodapé não fala de prazo. */
+  validade?: string | null;
 }) {
+  // 23/09/2026 — o Vidalink vence (o site avisa: para manter, continue acessando o clube).
+  // Vencido conta como inativo mesmo com o plano em dia, e o rodapé diz o que fazer.
+  const hoje = new Date().toISOString().slice(0, 10);
+  const vencido = !!validade && validade.slice(0, 10) < hoje;
+  const valeAgora = ativo && !vencido;
+  const rodape = !numero
+    ? 'Toque para gerar seu cartão'
+    : vencido
+      ? 'Cartão vencido. Toque para reativar no clube'
+      : validade
+        ? `Válido até ${dataBr(validade)} · apresente na farmácia`
+        : 'Apresente na farmácia conveniada';
   return (
     <View style={s.cartao}>
       <View style={s.blob} />
@@ -43,7 +64,10 @@ export function CartaoClube({
           <Text style={s.titulo}>Vidalink</Text>
         </View>
         {numero ? (
-          <Pill texto={ativo ? 'ativo' : 'inativo'} tom={ativo ? 'ok' : 'erro'} />
+          <Pill
+            texto={vencido ? 'vencido' : valeAgora ? 'ativo' : 'inativo'}
+            tom={valeAgora ? 'ok' : 'erro'}
+          />
         ) : (
           <Pill texto="pendente" tom="aviso" />
         )}
@@ -62,9 +86,7 @@ export function CartaoClube({
       </View>
 
       <View style={s.rodape}>
-        <Text style={s.rodapeTxt}>
-          {numero ? 'Apresente na farmácia conveniada' : 'Toque para gerar seu cartão'}
-        </Text>
+        <Text style={s.rodapeTxt}>{rodape}</Text>
       </View>
     </View>
   );

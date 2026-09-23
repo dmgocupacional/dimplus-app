@@ -55,22 +55,51 @@ const DESTINOS: Record<string, string> = {
 const OUVIR_ATIVACAO = `
 (function () {
   if (window.__dimVidalink) return; window.__dimVidalink = true;
-  function avisar(ok) {
-    if (ok && window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ tipo: 'vidalink_ativado' }));
-    }
+  function enviarMsg(obj) {
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(obj));
   }
-  function ehAtivacao(url) { return typeof url === 'string' && /\/vidalink\/active(\?|$)/.test(url); }
+  // Sem expressões regulares de propósito: este texto vive dentro de template string do TS,
+  // e barra invertida aqui já causou erro de escape.
+  function ehAtivacao(url) {
+    return typeof url === 'string' && url.indexOf('/vidalink/active') >= 0;
+  }
+  function tratarAtivacao(url, texto) {
+    if (!ehAtivacao(url)) return;
+    try { if (JSON.parse(texto).success === true) enviarMsg({ tipo: 'vidalink_ativado' }); } catch (e) {}
+  }
+  // Status: ao abrir logada, a página busca o usuário e recebe vidalink_expire_date. Procura só
+  // esse campo nas respostas JSON (profundidade limitada) e repassa só a data AAAA-MM-DD.
+  var ultimaValidade;
+  function acharValidade(o, prof) {
+    if (!o || typeof o !== 'object' || prof > 6) return undefined;
+    if (Object.prototype.hasOwnProperty.call(o, 'vidalink_expire_date')) return o.vidalink_expire_date;
+    for (var k in o) { var v = acharValidade(o[k], prof + 1); if (v !== undefined) return v; }
+    return undefined;
+  }
+  function tratarStatus(texto) {
+    if (typeof texto !== 'string' || texto.indexOf('vidalink_expire_date') < 0) return;
+    try {
+      var v = acharValidade(JSON.parse(texto), 0);
+      if (v === undefined) return;
+      var data = (typeof v === 'string' && v.length >= 10 && v.charAt(4) === '-' && v.charAt(7) === '-')
+        ? v.slice(0, 10) : null;
+      if (data === ultimaValidade) return;
+      ultimaValidade = data;
+      enviarMsg({ tipo: 'vidalink_status', validade: data });
+    } catch (e) {}
+  }
   var abrir = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (m, url) { this.__dimUrl = url; return abrir.apply(this, arguments); };
   var enviar = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.send = function () {
     var x = this;
-    if (ehAtivacao(x.__dimUrl)) {
-      x.addEventListener('load', function () {
-        try { avisar(x.status >= 200 && x.status < 300 && JSON.parse(x.responseText).success === true); } catch (e) {}
-      });
-    }
+    x.addEventListener('load', function () {
+      if (x.status < 200 || x.status >= 300) return;
+      var t = '';
+      try { t = x.responseText; } catch (e) { return; }
+      tratarAtivacao(x.__dimUrl, t);
+      tratarStatus(t);
+    });
     return enviar.apply(this, arguments);
   };
   if (window.fetch) {
@@ -78,10 +107,10 @@ const OUVIR_ATIVACAO = `
     window.fetch = function (entrada) {
       var url = typeof entrada === 'string' ? entrada : (entrada && entrada.url);
       var p = f.apply(this, arguments);
-      if (ehAtivacao(url)) {
-        p.then(function (r) { return r.clone().json().then(function (j) { avisar(r.ok && j && j.success === true); }); })
-         .catch(function () {});
-      }
+      p.then(function (r) {
+        if (!r.ok) return;
+        return r.clone().text().then(function (t) { tratarAtivacao(url, t); tratarStatus(t); });
+      }).catch(function () {});
       return p;
     };
   }
@@ -113,7 +142,7 @@ type Estado =
 
 export default function ClubeWeb() {
   const { destino } = useLocalSearchParams<{ destino?: string }>();
-  const { cliente, recarregar } = useSession();
+  const { cliente, clube, recarregar } = useSession();
   // Um aviso por tela: a página pode reenviar a ativação, o app grava uma vez.
   const jaGravou = useRef(false);
 
@@ -124,13 +153,30 @@ export default function ClubeWeb() {
     } catch {
       return; // mensagem de outro script da página: ignora
     }
-    if (msg?.tipo !== 'vidalink_ativado' || jaGravou.current) return;
     const cpf = String(cliente?.cpf ?? '').replace(/\D/g, '');
     if (cpf.length !== 11) return;
-    jaGravou.current = true;
-    const r = await informarVidalink(cpf);
-    if (r.ok) void recarregar();
-    else jaGravou.current = false; // falhou: deixa tentar de novo se o site reenviar
+
+    if (msg?.tipo === 'vidalink_ativado') {
+      if (jaGravou.current) return;
+      jaGravou.current = true;
+      const r = await informarVidalink(cpf);
+      if (r.ok) void recarregar();
+      else jaGravou.current = false; // falhou: deixa tentar de novo se o site reenviar
+      return;
+    }
+
+    // Status lido ao abrir a página: cobre quem ativou antes da captura existir e mantém a
+    // validade em dia. Só cria cartão com validade FUTURA (vencido não vira cartão novo) e só
+    // grava quando algo mudou, para não escrever a cada abertura do clube.
+    if (msg?.tipo === 'vidalink_status') {
+      const validade = (msg as { validade?: unknown }).validade;
+      if (typeof validade !== 'string') return;
+      if (clube?.cartao_vidalink && clube.vidalink_validade === validade) return;
+      const hoje = new Date().toISOString().slice(0, 10);
+      if (validade < hoje && !clube?.cartao_vidalink) return;
+      const r = await informarVidalink(cpf, validade);
+      if (r.ok) void recarregar();
+    }
   }
   const alvo = destino ? DESTINOS[destino] : undefined;
   const [estado, setEstado] = useState<Estado>({ fase: 'pedindo' });

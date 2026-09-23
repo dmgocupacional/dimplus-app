@@ -137,12 +137,14 @@ export interface CartaoClube {
   ativa: boolean;
   /** Número do cartão Vidalink informado pela pessoa. `null` = ainda não gerou. */
   cartao_vidalink: string | null;
+  /** Validade do cartão Vidalink (AAAA-MM-DD), lida do clube. `null` = desconhecida. */
+  vidalink_validade: string | null;
 }
 
 export async function getCartaoClube(): Promise<CartaoClube | null> {
   const { data, error } = await supabase
     .from('drachei_assinaturas')
-    .select('numero_cartao, plano_nome, status, cartao_vidalink')
+    .select('numero_cartao, plano_nome, status, cartao_vidalink, vidalink_validade')
     .maybeSingle();
   if (error || !data) return null;
   return {
@@ -150,6 +152,7 @@ export async function getCartaoClube(): Promise<CartaoClube | null> {
     plano_nome: data.plano_nome,
     ativa: data.status === 'ativa',
     cartao_vidalink: data.cartao_vidalink ?? null,
+    vidalink_validade: data.vidalink_validade ?? null,
   };
 }
 
@@ -197,10 +200,11 @@ export async function aderirClube(dados: DadosAdesao): Promise<ResultadoAdesao> 
  */
 export async function informarVidalink(
   numero: string,
+  validade?: string,
 ): Promise<{ ok: true } | { ok: false; mensagem: string }> {
   const r = await chamarFeegow<{ cartao_vidalink: string }>('/api/app/drachei/vidalink', {
     method: 'POST',
-    body: { numero },
+    body: validade ? { numero, validade } : { numero },
   });
   return r.ok ? { ok: true } : { ok: false, mensagem: r.mensagem };
 }
