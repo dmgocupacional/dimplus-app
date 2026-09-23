@@ -12,7 +12,8 @@
 //
 // ⚠️ Navegação presa ao clube: páginas do próprio clube abrem aqui; qualquer outro endereço
 // (telefone, mapa, site externo) sai para o sistema. Sem isto, um link qualquer no site deles
-// transformaria a tela do DIM+ num navegador genérico.
+// transformaria a tela do DIM+ num navegador genérico. A regra vale SÓ para o quadro principal:
+// iframes (reCAPTCHA, mapa, pagamento) fazem parte da página e carregam normalmente.
 // → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts)
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -89,9 +90,15 @@ export default function ClubeWeb() {
         onLoadEnd={() => setCarregandoPagina(false)}
         onError={() => setEstado({ fase: 'erro', mensagem: 'O site do clube não respondeu.' })}
         onShouldStartLoadWithRequest={(req) => {
-          if (ehDoClube(req.url)) return true;
-          // tel:, mailto:, mapas e sites de fora: sistema operacional, não esta tela.
-          if (req.url !== 'about:blank') abrirForaDoApp(req.url);
+          // 🔴 QUADROS EMBUTIDOS SEMPRE CARREGAM (bug de 23/09/2026). O site do clube usa
+          // reCAPTCHA do Google num iframe; tratar o iframe como navegação mandava o endereço
+          // do Google para o Safari, que abria a página solta com "domínio inválido para a
+          // chave do site" e o recurso do clube não funcionava. No iOS este callback também
+          // dispara para subquadros (isTopFrame=false); no Android, só para o quadro principal.
+          if (req.isTopFrame === false) return true;
+          if (req.url === 'about:blank' || ehDoClube(req.url)) return true;
+          // Navegação da PÁGINA para fora do clube (telefone, e-mail, mapa, outro site): sistema.
+          abrirForaDoApp(req.url);
           return false;
         }}
         setSupportMultipleWindows={false}
