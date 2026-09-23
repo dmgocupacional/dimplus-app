@@ -63,9 +63,9 @@ platform :ios do
       force: true, # sem prévia HTML: roda sem ninguém olhando
       run_precheck_before_submit: false,
       submit_for_review: revisao,
-      # 🔴 Lançamento manual depois de aprovado: a Apple aprova, e quem aperta "publicar" é a
-      # DIMEG. Trocar para true só por decisão explícita.
-      automatic_release: false,
+      # Decisão do Henrique (23/09/2026): nada segurado — aprovada pela Apple, vai direto
+      # para a loja. O Android segue a mesma regra (releaseStatus: completed no eas.json).
+      automatic_release: true,
       app_review_information: {
         demo_user: ENV.fetch("DEMO_CPF"),
         demo_password: ENV.fetch("DEMO_SENHA"),

@@ -9,7 +9,7 @@ name: Publicar nas lojas
 # Antes de disparar: a versão no app.json (+ package.json + src/lib/version.ts) tem de ser a NOVA.
 # O EAS incrementa o número do build sozinho (autoIncrement no eas.json).
 #
-# 🔴 Lançamento é MANUAL depois da aprovação da Apple (automatic_release: false no Fastfile).
+# Lançamento AUTOMÁTICO depois da aprovação, nas duas lojas (decisão do Henrique, 23/09/2026).
 # 🔴 Android só roda com o segredo GOOGLE_SA_JSON cadastrado — sem ele o job pula e avisa.
 #
 # Segredos usados: EXPO_TOKEN, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, DEMO_CPF, DEMO_SENHA,
