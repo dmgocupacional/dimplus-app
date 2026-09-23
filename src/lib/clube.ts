@@ -9,7 +9,7 @@
 // ⚠️ O número do cartão é lido direto da tabela (RLS deixa cada um ver só o próprio), e não
 // da rota: assim a home não depende de chamada externa para desenhar o cartão.
 import { requireOptionalNativeModule } from 'expo';
-import { Linking, TurboModuleRegistry } from 'react-native';
+import { Linking, Platform, TurboModuleRegistry } from 'react-native';
 
 import { supabase } from './supabase';
 import { chamarFeegow } from './feegowApi';
@@ -46,7 +46,11 @@ const temNavegadorEmbutido = requireOptionalNativeModule('ExpoWebBrowser') != nu
  * novo. Import fixo num binário antigo derruba o app inteiro na abertura, e a runtimeVersion
  * não distingue os binários. Aqui só se sabe se ele existe; quem importa é a tela, tarde.
  */
-export const temWebView = TurboModuleRegistry.get('RNCWebViewModule') != null;
+//
+// ⚠️ Protegido para WEB: o workflow de OTA exporta `--platform=all`, e no react-native-web o
+// `TurboModuleRegistry` não existe — ler `.get` direto derrubou o export em 23/09/2026.
+export const temWebView =
+  Platform.OS !== 'web' && TurboModuleRegistry?.get?.('RNCWebViewModule') != null;
 
 /** Abre qualquer URL no navegador embutido, ou no do sistema se o binário não tiver o módulo. */
 async function abrirUrl(url: string): Promise<void> {
