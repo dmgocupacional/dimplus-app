@@ -1,0 +1,7 @@
+Chegou muita coisa boa nesta versão:
+
+* Cartão de farmácia Vidalink: gere o seu cartão no app e ganhe desconto em medicamentos em mais de 20 mil farmácias. Ele aparece ao lado da sua carteirinha DIM+.
+* Farmácias perto de você: encontre as conveniadas mais próximas com um toque.
+* Clube de descontos com acesso direto, sem precisar de outro login.
+* Telemedicina a um toque: fale com um médico pelo celular, sem sair de casa.
+* SOS: numa emergência, ligue para o SAMU (192) ou os Bombeiros (193) com

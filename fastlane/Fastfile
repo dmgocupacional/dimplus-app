@@ -1,0 +1,95 @@
+# ═══ PUBLICAÇÃO NAS LOJAS ═══
+# 23/09/2026. Fonte única dos textos e capturas: fastlane/metadata e fastlane/screenshots.
+# O build e o envio do binário ficam com o EAS (eas build --auto-submit); o fastlane cuida do
+# que o EAS não faz — textos, capturas e o envio para revisão (Apple) / ficha (Google).
+#
+# 🔴 Credenciais só por ambiente, nunca no repositório:
+#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (conteúdo do .p8) — chave "Automacao DIM+ GitHub"
+#   DEMO_CPF, DEMO_SENHA — conta de demonstração para o revisor da Apple
+#   GOOGLE_SA_JSON — conta de serviço do Google Play (conteúdo do .json)
+require "json"
+
+default_platform(:ios)
+
+# Versão sempre do app.json — a mesma que o build carrega. Divergir aqui cria versão errada na loja.
+def versao_app
+  JSON.parse(File.read(File.expand_path("../app.json", __dir__)))["expo"]["version"]
+end
+
+def chave_asc
+  app_store_connect_api_key(
+    key_id: ENV.fetch("ASC_KEY_ID"),
+    issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+    key_content: ENV.fetch("ASC_KEY_P8"),
+    in_house: false,
+  )
+end
+
+platform :ios do
+  # Espera a Apple terminar de processar o build desta versão e devolve o número dele.
+  # O EAS termina o upload, mas a Apple ainda leva ~10-20 min processando; sem isto o envio
+  # para revisão falha com "nenhum build disponível".
+  private_lane :aguardar_build do |opts|
+    app = Spaceship::ConnectAPI::App.find("com.javenessi.dimmaissaude")
+    limite = Time.now + (opts[:minutos] || 45) * 60
+    loop do
+      builds = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id, version: versao_app, sort: "-uploadedDate", limit: 5,
+      )
+      pronto = builds.find { |b| b.processing_state == "VALID" }
+      if pronto
+        UI.success("Build #{versao_app} (#{pronto.version}) processado pela Apple")
+        break pronto.version
+      end
+      UI.user_error!("Build #{versao_app} não ficou pronto a tempo na Apple") if Time.now > limite
+      UI.message("Aguardando a Apple processar o build #{versao_app}…")
+      sleep 60
+    end
+  end
+
+  desc "Sobe textos e capturas; com enviar_revisao:true, seleciona o build e envia para revisão"
+  lane :publicar do |opts|
+    chave_asc
+    revisao = opts[:enviar_revisao].to_s == "true"
+    numero = revisao ? aguardar_build : nil
+
+    deliver(
+      app_version: versao_app,
+      build_number: numero,
+      skip_binary_upload: true,
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots",
+      overwrite_screenshots: true,
+      force: true, # sem prévia HTML: roda sem ninguém olhando
+      run_precheck_before_submit: false,
+      submit_for_review: revisao,
+      # 🔴 Lançamento manual depois de aprovado: a Apple aprova, e quem aperta "publicar" é a
+      # DIMEG. Trocar para true só por decisão explícita.
+      automatic_release: false,
+      app_review_information: {
+        demo_user: ENV.fetch("DEMO_CPF"),
+        demo_password: ENV.fetch("DEMO_SENHA"),
+      },
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false,
+      },
+    )
+  end
+end
+
+platform :android do
+  desc "Sobe textos e capturas da ficha da Play Store (o .aab vai pelo EAS)"
+  lane :publicar do
+    supply(
+      package_name: "com.javenessi.dimmsaude",
+      json_key_data: ENV.fetch("GOOGLE_SA_JSON"),
+      metadata_path: "./fastlane/metadata/android",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_changelogs: true, # as notas vão junto com o build, pelo EAS
+      track: "production",
+    )
+  end
+end
+# ── FIM BLOCO ──

@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Chave da conta de servico do Google Play (gerada no CI, nunca versionar)
+google-sa.json
+*.p8
+*.jks

@@ -1,0 +1,155 @@
+name: Publicar nas lojas
+
+# 23/09/2026. Um disparo leva a versão do app.json até as lojas:
+#   1. capturas de tela novas, fotografadas do app real (scripts/capturas_lojas.py)
+#   2. build de produção no EAS com envio automático do binário (--auto-submit)
+#   3. textos + capturas nas lojas pelo fastlane (fonte única: fastlane/metadata e /screenshots)
+#   4. iOS: espera a Apple processar o build e envia para revisão
+#
+# Antes de disparar: a versão no app.json (+ package.json + src/lib/version.ts) tem de ser a NOVA.
+# O EAS incrementa o número do build sozinho (autoIncrement no eas.json).
+#
+# 🔴 Lançamento é MANUAL depois da aprovação da Apple (automatic_release: false no Fastfile).
+# 🔴 Android só roda com o segredo GOOGLE_SA_JSON cadastrado — sem ele o job pula e avisa.
+#
+# Segredos usados: EXPO_TOKEN, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, DEMO_CPF, DEMO_SENHA,
+# GOOGLE_SA_JSON (opcional até existir a conta de serviço).
+
+on:
+  workflow_dispatch:
+    inputs:
+      plataforma:
+        description: Onde publicar
+        type: choice
+        options: [ios, android, ambas]
+        default: ambas
+      etapa:
+        description: tudo = build + envio + textos; so-textos = só textos e capturas, sem build
+        type: choice
+        options: [tudo, so-textos]
+        default: tudo
+      enviar_revisao:
+        description: iOS — enviar para revisão da Apple ao final
+        type: boolean
+        default: true
+
+concurrency:
+  group: publicar-lojas
+  cancel-in-progress: false # nunca derrubar um envio no meio
+
+jobs:
+  capturas:
+    name: Capturas de tela
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Playwright
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Fotografar o app
+        env:
+          DEMO_CPF: ${{ secrets.DEMO_CPF }}
+          DEMO_SENHA: ${{ secrets.DEMO_SENHA }}
+        run: python scripts/capturas_lojas.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: |
+            fastlane/screenshots
+            fastlane/metadata/android/pt-BR/images
+          retention-days: 7
+
+  ios:
+    name: iOS
+    needs: capturas
+    if: inputs.plataforma != 'android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build e envio do binário (EAS)
+        if: inputs.etapa == 'tudo'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest build --platform ios --profile production --non-interactive --wait --auto-submit
+      - uses: actions/download-artifact@v4
+        with:
+          name: capturas
+          path: fastlane
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - run: gem install fastlane --no-document
+      - name: Textos, capturas e revisão (fastlane)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          DEMO_CPF: ${{ secrets.DEMO_CPF }}
+          DEMO_SENHA: ${{ secrets.DEMO_SENHA }}
+          # Só-textos nunca envia para revisão: sem build novo, não há o que revisar.
+          ENVIAR: ${{ inputs.etapa == 'tudo' && inputs.enviar_revisao }}
+        run: fastlane ios publicar enviar_revisao:$ENVIAR
+
+  android:
+    name: Android
+    needs: capturas
+    if: inputs.plataforma != 'ios'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Conta de serviço do Google configurada?
+        id: google
+        env:
+          SA: ${{ secrets.GOOGLE_SA_JSON }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::warning::GOOGLE_SA_JSON não cadastrado — Android pulado. Cadastre a conta de serviço do Google Play."
+            echo "pronto=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.google.outputs.pronto == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.google.outputs.pronto == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.google.outputs.pronto == 'true'
+      - name: Chave do Google para o EAS
+        if: steps.google.outputs.pronto == 'true'
+        env:
+          SA: ${{ secrets.GOOGLE_SA_JSON }}
+        run: printf '%s' "$SA" > google-sa.json
+      - name: Build e envio do .aab (EAS)
+        if: steps.google.outputs.pronto == 'true' && inputs.etapa == 'tudo'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest build --platform android --profile production --non-interactive --wait --auto-submit
+      - uses: actions/download-artifact@v4
+        if: steps.google.outputs.pronto == 'true'
+        with:
+          name: capturas
+          path: fastlane
+      - uses: ruby/setup-ruby@v1
+        if: steps.google.outputs.pronto == 'true'
+        with:
+          ruby-version: "3.3"
+      - run: gem install fastlane --no-document
+        if: steps.google.outputs.pronto == 'true'
+      - name: Textos e capturas da ficha (fastlane)
+        if: steps.google.outputs.pronto == 'true'
+        env:
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+        run: fastlane android publicar

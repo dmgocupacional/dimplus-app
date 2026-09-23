@@ -1,0 +1,4 @@
+# iOS: bundle da App Store (herdado do dev anterior, não muda sem virar app novo)
+app_identifier("com.javenessi.dimmaissaude")
+# Android: pacote do app publicado na Play Store
+package_name("com.javenessi.dimmsaude")
