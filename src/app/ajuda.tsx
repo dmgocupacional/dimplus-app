@@ -17,7 +17,11 @@ const FAQ: { p: string; r: string }[] = [
   },
   {
     p: 'O que significa "em breve"?',
-    r: 'São serviços que ainda estão sendo ativados no app, como exames e telemedicina. Você será avisado quando abrirem.',
+    r: 'São serviços que ainda estão sendo ativados no app, como os resultados de exames. Você será avisado quando abrirem.',
+  },
+  {
+    p: 'Como funciona a telemedicina?',
+    r: 'Toque em Telemedicina na tela inicial e confirme. O app abre a pré-consulta do nosso parceiro já com você conectado, e de lá você segue para o atendimento com um médico por vídeo.',
   },
   {
     p: 'Como cancelo o meu plano?',

@@ -3,9 +3,8 @@
 // GrupoSin. Quem cria é o erp (POST /api/app/drachei/aderir) — o app só informa o que falta
 // no cadastro e mostra o número.
 //
-// 🔴 O APP NÃO GUARDA SENHA DO CLUBE. O login de lá é gerado por eles: usuário é o CPF só
-// com números e a senha inicial é a padrão da empresa. São credenciais de OUTRO sistema; a
-// senha do app não vale lá e não deve ser pedida aqui.
+// 🔴 O APP NÃO GUARDA SENHA DO CLUBE. Desde 23/09/2026 nem precisa: o clube abre com link de
+// sessão gerado pelo Gestor (/auth/clube). A pessoa não cria conta nem digita senha lá.
 //
 // ⚠️ O número do cartão é lido direto da tabela (RLS deixa cada um ver só o próprio), e não
 // da rota: assim a home não depende de chamada externa para desenhar o cartão.
@@ -38,19 +37,53 @@ export const URL_CLUBE = 'https://portal.dimmsaude.com.br/login';
 // módulo só é carregado se existir no binário; senão, o clube abre no navegador do sistema.
 const temNavegadorEmbutido = requireOptionalNativeModule('ExpoWebBrowser') != null;
 
-export async function abrirClube(): Promise<void> {
+/** Abre qualquer URL no navegador embutido, ou no do sistema se o binário não tiver o módulo. */
+async function abrirUrl(url: string): Promise<void> {
   if (!temNavegadorEmbutido) {
-    await Linking.openURL(URL_CLUBE);
+    await Linking.openURL(url);
     return;
   }
   // require tardio de propósito: só avalia o pacote quando o módulo nativo existe.
   const WebBrowser = require('expo-web-browser') as typeof import('expo-web-browser');
-  await WebBrowser.openBrowserAsync(URL_CLUBE, {
+  await WebBrowser.openBrowserAsync(url, {
     toolbarColor: '#202745', // navy da marca
     controlsColor: '#FFFFFF',
     enableBarCollapsing: true,
     showTitle: true,
   });
+}
+
+export type ResultadoAbrir = { ok: true } | { ok: false; mensagem: string };
+
+/**
+ * 23/09/2026 — o clube abre JÁ AUTENTICADO. O erp pede ao Gestor um link de sessão
+ * (/auth/clube) e o app só redireciona: nada de segundo cadastro nem de senha do parceiro.
+ *
+ * 🔴 A URL devolvida é CREDENCIAL (token de sessão na query). Usar uma vez e descartar: não
+ * guardar em estado, não logar, não reaproveitar. Cada toque pede um link novo.
+ *
+ * Sem link (parceiro fora do ar, cadastro pendente lá) o app NÃO cai no portal genérico:
+ * lá a pessoa teria de criar outra conta, que é justamente o que este fluxo elimina.
+ */
+export async function abrirClube(): Promise<ResultadoAbrir> {
+  const r = await chamarFeegow<{ url: string }>('/api/app/drachei/clube', { method: 'POST', body: {} });
+  if (!r.ok) return { ok: false, mensagem: r.mensagem };
+  await abrirUrl(r.dados.url);
+  return { ok: true };
+}
+
+/**
+ * Abre um atendimento de telemedicina e leva à pré-consulta.
+ * 🔴 Cada chamada CRIA um atendimento no parceiro — só no toque explícito, nunca em retry.
+ */
+export async function abrirTelemedicina(dependenteId?: string): Promise<ResultadoAbrir> {
+  const r = await chamarFeegow<{ url: string; mensagem: string }>('/api/app/drachei/telemedicina', {
+    method: 'POST',
+    body: dependenteId ? { dependente_id: dependenteId } : {},
+  });
+  if (!r.ok) return { ok: false, mensagem: r.mensagem };
+  await abrirUrl(r.dados.url);
+  return { ok: true };
 }
 
 export type Sexo = 'M' | 'F';
@@ -92,16 +125,38 @@ export type ResultadoAdesao =
   | { ok: true; numero_cartao: string | null }
   | { ok: false; mensagem: string; faltando?: string[] };
 
-export async function aderirClube(dados: {
+/** O que o app pode completar do cadastro. Os nomes batem com as colunas de `clientes`. */
+export interface DadosAdesao {
   sexo?: Sexo;
   data_nascimento?: string;
-}): Promise<ResultadoAdesao> {
-  const r = await chamarFeegow<{ numero_cartao: string | null; faltando?: string[] }>(
-    '/api/app/drachei/aderir',
-    { method: 'POST', body: dados },
-  );
+  naturalidade?: string;
+  email?: string;
+  endereco_cep?: string;
+  endereco_logradouro?: string;
+  endereco_numero?: string;
+  endereco_bairro?: string;
+  endereco_complemento?: string;
+  endereco_cidade?: string;
+  endereco_uf?: string;
+}
+
+/**
+ * ⚠️ 23/09/2026 — o parceiro passou a exigir e-mail, naturalidade e endereço completo. O erp
+ * responde 422 com `faltando` (nomes das chaves que faltam); a tela usa essa lista para
+ * perguntar SÓ o que falta, em vez de um formulário cheio de coisas que já temos.
+ */
+export async function aderirClube(dados: DadosAdesao): Promise<ResultadoAdesao> {
+  const r = await chamarFeegow<{ numero_cartao: string | null }>('/api/app/drachei/aderir', {
+    method: 'POST',
+    body: dados,
+  });
   if (r.ok) return { ok: true, numero_cartao: r.dados.numero_cartao };
-  return { ok: false, mensagem: r.mensagem };
+  const faltando = (r.corpo as { faltando?: unknown } | undefined)?.faltando;
+  return {
+    ok: false,
+    mensagem: r.mensagem,
+    faltando: Array.isArray(faltando) ? faltando.filter((f): f is string => typeof f === 'string') : undefined,
+  };
 }
 
 /**

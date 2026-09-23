@@ -5,6 +5,7 @@ import type { ComponentProps } from 'react';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
 import { CartaoClube } from '@/components/CartaoClube';
 import { CartaoDigital } from '@/components/CartaoDigital';
 import { Aviso, Card, Screen, Tile, Titulo } from '@/components/ui';
+import { abrirTelemedicina } from '@/lib/clube';
 import { mensagemBloqueio } from '@/lib/gate';
 import type { ModuloKey } from '@/lib/types';
 import { useSession } from '@/state/session';
@@ -43,6 +45,8 @@ const ATALHOS: Atalho[] = [
   // ver `erp-dimplus/docs/ROADMAP-APP.md` FASE 2). Com `rota: null` e flag ligada, o tile
   // já estava caindo no mesmo bug de "toque morto" do `sos` logo abaixo — corrigido aqui.
   { key: 'exames', rotulo: 'Exames', icone: 'document-text', rota: '/exames' },
+  // 23/09/2026 — Telemedicina ligada: provedor é o Dr. Achei (/telemedicina/solicitar). Não
+  // tem rota própria — o toque abre o atendimento direto (→ BLOCO: CLUBE DE DESCONTOS).
   { key: 'telemedicina', rotulo: 'Telemedicina', icone: 'videocam', rota: null },
   // 🔴 TOQUE MORTO CONHECIDO (apurado 17/08/2026, correção adiada pelo Henrique).
   // `app_features.sos` está ativo=true / exige_pagamento=false, logo `pode('sos')` devolve
@@ -63,6 +67,7 @@ export default function Inicio() {
   const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo } = useSession();
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<string | null>(null);
+  const [abrindoTele, setAbrindoTele] = useState(false);
   // ═══ BLOCO: CARROSSEL DE CARTÕES ═══
   // 21/09/2026: o carrossel não se mostrava — o 1º cartão ocupava a tela toda, sem marcador,
   // e o pagingEnabled (pula a largura da TELA) parava o 2º cartão torto. Agora: o cartão fica
@@ -99,7 +104,36 @@ export default function Inicio() {
       setTimeout(() => setToast(null), 2600);
       return;
     }
+    if (a.key === 'telemedicina') {
+      void iniciarTelemedicina();
+      return;
+    }
     if (a.rota) router.push(a.rota as never);
+  }
+
+  // 🔴 Cada toque CRIA um atendimento no parceiro. Por isso a confirmação antes, e a trava
+  // de `abrindoTele` contra toque duplo — dois toques seriam duas consultas abertas.
+  function iniciarTelemedicina() {
+    if (abrindoTele) return;
+    Alert.alert(
+      'Iniciar atendimento',
+      'Vamos abrir uma consulta de telemedicina agora. Deseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Iniciar',
+          onPress: async () => {
+            setAbrindoTele(true);
+            const r = await abrirTelemedicina();
+            setAbrindoTele(false);
+            if (!r.ok) {
+              setToast(r.mensagem);
+              setTimeout(() => setToast(null), 3200);
+            }
+          },
+        },
+      ],
+    );
   }
 
   return (

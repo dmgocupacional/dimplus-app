@@ -43,7 +43,14 @@ export type FeegowErroTipo =
 
 export type FeegowResultado<T> =
   | { ok: true; dados: T }
-  | { ok: false; tipo: FeegowErroTipo; mensagem: string; status?: number };
+  | {
+      ok: false;
+      tipo: FeegowErroTipo;
+      mensagem: string;
+      status?: number;
+      /** Corpo JSON do erro, quando houver — ex.: a lista `faltando` do 422 da adesão ao clube. */
+      corpo?: unknown;
+    };
 
 function tipoPorStatus(status: number): FeegowErroTipo {
   if (status === 307) return 'sem_sessao';
@@ -103,13 +110,15 @@ export async function chamarFeegow<T>(path: string, opcoes: Opcoes = {}): Promis
 
   if (!resp.ok) {
     let mensagem = 'Não foi possível completar a operação.';
+    let corpo: unknown;
     try {
       const json = (await resp.json()) as { error?: string };
+      corpo = json;
       if (json.error) mensagem = json.error;
     } catch {
       // Corpo não é JSON (ex.: página de erro HTML) — mantém a mensagem padrão.
     }
-    return { ok: false, tipo: tipoPorStatus(resp.status), mensagem, status: resp.status };
+    return { ok: false, tipo: tipoPorStatus(resp.status), mensagem, status: resp.status, corpo };
   }
 
   const dados = (await resp.json()) as T;

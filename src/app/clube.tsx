@@ -2,9 +2,9 @@
 // 16/09/2026. Trava que vem DEPOIS do aceite do termo: quem ainda não tem cartão de
 // descontos em farmácias passa por aqui, no primeiro acesso e também quem já usava o app.
 //
-// 🔴 PEDE SÓ O QUE FALTA. O Gestor recusa apenas `sexo` nulo (provado na API em 16/09), e a
-// data de nascimento já está no cadastro da maioria. Pedir endereço aqui seria repetir o que
-// a pessoa já preencheu na adesão — e o erp manda o que tiver.
+// 🔴 PEDE SÓ O QUE FALTA. Em 16/09 o Gestor só recusava `sexo` nulo; em 23/09 passou a exigir
+// e-mail, naturalidade e endereço completo. A tela manda o sexo, e se o erp responder 422 com
+// `faltando`, abre só aqueles campos — quem já tem tudo no cadastro não vê formulário nenhum.
 //
 // 21/09/2026 — a tela conduz as DUAS etapas, pelo estado da sessão:
 //   1. sem assinatura      → adesão (pede o sexo, o ERP cria a assinatura no Gestor);
@@ -21,7 +21,15 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
-import { abrirClube, aderirClube, dispensarClubePorAgora, informarVidalink, type Sexo } from '@/lib/clube';
+import { consultarCEP } from '@/lib/auth';
+import {
+  abrirClube,
+  aderirClube,
+  dispensarClubePorAgora,
+  informarVidalink,
+  type DadosAdesao,
+  type Sexo,
+} from '@/lib/clube';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
@@ -37,19 +45,78 @@ export default function AdesaoClube() {
   return <PassoAdesao />;
 }
 
+// Rótulo e teclado de cada campo que o erp pode apontar como faltante (chaves do 422).
+// A ordem aqui é a ordem na tela — endereço agrupado, CEP primeiro porque preenche o resto.
+const CAMPOS: {
+  chave: string;
+  dado: keyof DadosAdesao;
+  rotulo: string;
+  teclado?: 'email-address' | 'number-pad' | 'default';
+  max?: number;
+}[] = [
+  { chave: 'email', dado: 'email', rotulo: 'E-MAIL', teclado: 'email-address', max: 120 },
+  { chave: 'naturalidade', dado: 'naturalidade', rotulo: 'NATURALIDADE (CIDADE ONDE NASCEU)', max: 60 },
+  { chave: 'cep', dado: 'endereco_cep', rotulo: 'CEP', teclado: 'number-pad', max: 9 },
+  { chave: 'endereco', dado: 'endereco_logradouro', rotulo: 'RUA', max: 120 },
+  { chave: 'numero', dado: 'endereco_numero', rotulo: 'NÚMERO', max: 15 },
+  { chave: 'bairro', dado: 'endereco_bairro', rotulo: 'BAIRRO', max: 80 },
+  { chave: 'cidade', dado: 'endereco_cidade', rotulo: 'CIDADE', max: 80 },
+  { chave: 'uf', dado: 'endereco_uf', rotulo: 'UF', max: 2 },
+];
+
 function PassoAdesao() {
   const { cliente, recarregar } = useSession();
   const [sexo, setSexo] = useState<Sexo | null>(null);
+  const [dados, setDados] = useState<DadosAdesao>({});
+  // null = ainda não perguntamos ao erp o que falta; [] = nada falta.
+  const [faltando, setFaltando] = useState<string[] | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  const camposVisiveis = CAMPOS.filter((c) => faltando?.includes(c.chave));
+  const incompleto = camposVisiveis.some((c) => !String(dados[c.dado] ?? '').trim());
+
+  function mudar(dado: keyof DadosAdesao, valor: string) {
+    setDados((d) => ({ ...d, [dado]: valor }));
+    if (dado === 'endereco_cep' && valor.replace(/\D/g, '').length === 8) void preencherPorCep(valor);
+  }
+
+  // CEP completa rua, bairro, cidade e UF. Se não achar, a pessoa digita — CEP nunca trava.
+  async function preencherPorCep(cep: string) {
+    const r = await consultarCEP(cep);
+    if (!r.encontrado) return;
+    setDados((d) => ({
+      ...d,
+      endereco_logradouro: d.endereco_logradouro || r.logradouro,
+      endereco_bairro: d.endereco_bairro || r.bairro,
+      endereco_cidade: d.endereco_cidade || r.cidade,
+      endereco_uf: d.endereco_uf || r.uf,
+    }));
+  }
+
   async function confirmar() {
-    if (enviando || !sexo) return;
+    if (enviando || !sexo || incompleto) return;
     setEnviando(true);
     setErro(null);
-    const r = await aderirClube({ sexo });
+    const limpos: DadosAdesao = { sexo };
+    for (const c of camposVisiveis) {
+      const v = String(dados[c.dado] ?? '').trim();
+      if (v) (limpos as Record<string, string>)[c.dado] = c.chave === 'uf' ? v.toUpperCase() : v;
+    }
+    const r = await aderirClube(limpos);
     setEnviando(false);
     if (!r.ok) {
+      // 422 com a lista: mostra só os campos que faltam, sem tratar como erro da pessoa.
+      if (r.faltando && r.faltando.length > 0) {
+        const doFormulario = r.faltando.filter((f) => CAMPOS.some((c) => c.chave === f));
+        if (doFormulario.length > 0) {
+          setFaltando(doFormulario);
+          return;
+        }
+        // Falta algo que a pessoa não resolve por aqui (nome, CPF, nascimento): é do balcão.
+        setErro('Falta um dado no seu cadastro que só a central consegue completar. Fale com a gente pela Ajuda.');
+        return;
+      }
       setErro(r.mensagem);
       return;
     }
@@ -64,12 +131,13 @@ function PassoAdesao() {
 
   return (
     <Screen titulo="Clube de descontos">
-      <ScrollView contentContainerStyle={s.conteudo}>
+      <ScrollView contentContainerStyle={s.conteudo} keyboardShouldPersistTaps="handled">
         <Card>
           <Titulo>Seu cartão de descontos em farmácias</Titulo>
           <Text style={s.texto}>
-            O seu plano dá direito a descontos em remédios nas farmácias conveniadas. Para
-            gerar o cartão, confirme os dados abaixo. Leva menos de um minuto.
+            {faltando && faltando.length > 0
+              ? 'Quase lá. Para emitir o cartão, o parceiro precisa destes dados:'
+              : 'O seu plano dá direito a descontos em remédios nas farmácias conveniadas. Para gerar o cartão, confirme os dados abaixo. Leva menos de um minuto.'}
           </Text>
 
           <Text style={s.rotulo}>SEXO</Text>
@@ -88,6 +156,21 @@ function PassoAdesao() {
             })}
           </View>
 
+          {camposVisiveis.map((c) => (
+            <View key={c.chave}>
+              <Text style={s.rotulo}>{c.rotulo}</Text>
+              <TextInput
+                value={String(dados[c.dado] ?? '')}
+                onChangeText={(v) => mudar(c.dado, v)}
+                keyboardType={c.teclado ?? 'default'}
+                autoCapitalize={c.chave === 'email' ? 'none' : c.chave === 'uf' ? 'characters' : 'words'}
+                autoCorrect={false}
+                maxLength={c.max}
+                style={s.campo}
+              />
+            </View>
+          ))}
+
           {cliente?.nome ? (
             <Text style={s.nota}>O cartão será emitido no nome de {cliente.nome}.</Text>
           ) : null}
@@ -96,8 +179,8 @@ function PassoAdesao() {
 
           <Pressable
             onPress={confirmar}
-            disabled={!sexo || enviando}
-            style={[s.botao, (!sexo || enviando) && s.botaoOff]}
+            disabled={!sexo || incompleto || enviando}
+            style={[s.botao, (!sexo || incompleto || enviando) && s.botaoOff]}
           >
             {enviando ? (
               <ActivityIndicator color={color.navy} />
@@ -112,6 +195,34 @@ function PassoAdesao() {
         </Card>
       </ScrollView>
     </Screen>
+  );
+}
+
+/** Botão que abre o clube já autenticado e mostra o motivo se o parceiro recusar. */
+function BotaoClube({ rotulo, secundario }: { rotulo: string; secundario?: boolean }) {
+  const [abrindo, setAbrindo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function abrir() {
+    if (abrindo) return;
+    setAbrindo(true);
+    setErro(null);
+    const r = await abrirClube();
+    setAbrindo(false);
+    if (!r.ok) setErro(r.mensagem);
+  }
+
+  return (
+    <View>
+      <Pressable onPress={abrir} disabled={abrindo} style={secundario ? s.botaoSec : s.botao}>
+        {abrindo ? (
+          <ActivityIndicator color={secundario ? color.navy : color.navy} />
+        ) : (
+          <Text style={secundario ? s.botaoSecTxt : s.botaoTxt}>{rotulo}</Text>
+        )}
+      </Pressable>
+      {erro ? <Aviso texto={erro} /> : null}
+    </View>
   );
 }
 
@@ -147,14 +258,12 @@ function PassoVidalink() {
         <Card>
           <Titulo>Gere seu cartão de farmácia</Titulo>
           <Text style={s.texto}>
-            O desconto nas farmácias vale com o cartão Vidalink. Ele é gerado no portal do clube,
+            O desconto nas farmácias vale com o cartão Vidalink. Ele é gerado dentro do clube,
             em dois passos:
           </Text>
 
-          <Text style={s.passo}>1. Abra o portal, crie seu acesso e gere o cartão.</Text>
-          <Pressable onPress={() => void abrirClube()} style={s.botaoSec}>
-            <Text style={s.botaoSecTxt}>Abrir o portal do clube</Text>
-          </Pressable>
+          <Text style={s.passo}>1. Abra o clube (você já entra conectado) e gere o cartão.</Text>
+          <BotaoClube rotulo="Abrir o clube" secundario />
 
           <Text style={s.passo}>2. Volte aqui e digite o número do cartão gerado.</Text>
           <TextInput
@@ -202,9 +311,7 @@ function ClubePronto({ numero }: { numero: string }) {
           </Text>
           <Text style={s.rotulo}>Nº DO CARTÃO</Text>
           <Text style={s.numero}>{numero.replace(/(.{4})/g, '$1 ').trim()}</Text>
-          <Pressable onPress={() => void abrirClube()} style={s.botao}>
-            <Text style={s.botaoTxt}>Abrir o portal do clube</Text>
-          </Pressable>
+          <BotaoClube rotulo="Abrir o clube" />
         </Card>
       </ScrollView>
     </Screen>
