@@ -19,6 +19,15 @@
 | Dependentes (titular ↔ dependente) | `docs/ROADMAP-DEPENDENTES.md` neste repo |
 | Ordem geral das frentes do ERP | `erp-dimplus/docs/PLANO-MESTRE.md` |
 
+## 📍 Estado do app — 23/09/2026 · v4.23.0 · SDK 57
+
+- **App Store:** 4.23.0 (build 4) aguardando revisão, lançamento automático. **Play Store:** app já
+  publicado desde 19/01/2026 como `com.javenessi.dimmsaude`; atualização presa na redefinição da
+  chave de upload pelo Google. Handoff: `docs/sessions/2026-09-23-clube-sos-e-publicacao-automatica.md`.
+- **Publicação automática** montada: `.github/workflows/publicar-lojas.yml` + `fastlane/` (fonte
+  única dos textos) + `scripts/capturas_lojas.py`.
+- Entraram clube em WebView, cartão Vidalink automático, telemedicina e SOS.
+
 ## 📍 Estado do app — 04/09/2026 · v4.0.0 · SDK 57
 
 - **SDK 54 → 57** (RN 0.86.3, React 19.2.3). O Expo Go da App Store atualizou sozinho para a 57
