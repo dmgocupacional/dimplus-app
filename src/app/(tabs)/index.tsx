@@ -56,7 +56,9 @@ const ATALHOS: Atalho[] = [
   // `agendamento` e `exames` já têm tela e rota desde 18-19/08.
   // Três saídas possíveis pro `sos`, decisão pendente: (a) toast "em breve", (b) forçar
   // emBreve na tela — mentira leve, a flag está ligada, (c) desligar a flag no banco.
-  { key: 'sos', rotulo: 'SOS', icone: 'medkit', rota: null },
+  // ✅ 23/09/2026: tela /sos existe — ligar 192/193, localização e compartilhar. Fim do toque
+  // morto registrado acima.
+  { key: 'sos', rotulo: 'SOS', icone: 'medkit', rota: '/sos' },
   { key: 'ajuda', rotulo: 'Ajuda', icone: 'help-circle', rota: '/ajuda' },
 ];
 

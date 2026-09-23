@@ -2,7 +2,7 @@
   "expo": {
     "name": "DIM+ Saúde",
     "slug": "dimplus",
-    "version": "4.22.0",
+    "version": "4.23.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "scheme": "dimplus",
@@ -31,7 +31,18 @@
       ],
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O DIM+ usa a sua localização apenas na tela de SOS, para mostrar o seu endereço aproximado e ajudar você a informá-lo ao SAMU ou aos Bombeiros numa emergência.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false,
+          "locationAlwaysAndWhenInUsePermission": "O DIM+ usa a sua localização apenas na tela de SOS, para mostrar o seu endereço aproximado e ajudar você a informá-lo ao SAMU ou aos Bombeiros numa emergência.",
+          "locationAlwaysPermission": "O DIM+ usa a sua localização apenas na tela de SOS, para mostrar o seu endereço aproximado e ajudar você a informá-lo ao SAMU ou aos Bombeiros numa emergência."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

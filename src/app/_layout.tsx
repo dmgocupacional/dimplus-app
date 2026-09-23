@@ -76,6 +76,11 @@ function Roteador() {
       return;
     }
 
+    // 🔴 SOS NUNCA É BLOQUEADO (23/09/2026). As travas abaixo (termo, clube) redirecionam a
+    // pessoa para outra tela; numa emergência isso é inaceitável. Quem está no /sos fica no
+    // /sos — os botões de ligar não dependem de termo, plano ou adesão a nada.
+    if (partes[0] === 'sos') return;
+
     // ═══ ACEITE PENDENTE — bloqueia o app ═══
     // 26/08/2026. Esta é a peça que faltava: a tela `aceite-termo` existia desde o lote das
     // 14h e NÃO era alcançável por rota nenhuma, então nunca aparecia para ninguém.
@@ -114,6 +119,10 @@ function Roteador() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="sos"
+        options={{ headerShown: true, title: 'SOS', headerTintColor: color.navy, headerBackTitle: 'Voltar' }}
+      />
       {/* 23/09/2026 — clube em WebView com o cabeçalho do DIM+: é o que faz parecer nativo. */}
       <Stack.Screen
         name="clube-web"
