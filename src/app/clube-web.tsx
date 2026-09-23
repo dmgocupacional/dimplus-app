@@ -19,7 +19,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { abrirClube, abrirForaDoApp, pedirLinkClube, temWebView } from '@/lib/clube';
+import { abrirClube, abrirForaDoApp, informarVidalink, pedirLinkClube, temWebView } from '@/lib/clube';
+import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 // User-agent do navegador do sistema, SEM o marcador `wv`/WebView: é por ele que o reCAPTCHA
@@ -38,6 +39,54 @@ const UA_NAVEGADOR =
 const DESTINOS: Record<string, string> = {
   farmacia: 'https://www.cartaodedescontos.com.br/cartao-farmacia',
 };
+
+// ═══ CAPTURA DA ATIVAÇÃO DO VIDALINK (23/09/2026) ═══
+// Lido no código do site em produção (chunk da página /cartao-farmacia): o cartão Vidalink é o
+// CPF do titular (o modal do cartão recebe só `user.document` e `vidalink_expire_date`), e a
+// ativação é um único `POST .../vidalink/active` que responde `{ success: true }`.
+//
+// Então não há número para ler da tela: basta saber que a ativação deu certo. Este script
+// embrulha XHR e fetch da página e avisa o app quando essa resposta volta com sucesso. Não lê,
+// não copia e não repassa mais nada da sessão — só o sinal de "ativou".
+//
+// ⚠️ Depende do site do parceiro como está hoje. Se a rota mudar, a captura para em silêncio e
+// a tela manual de digitar o número volta a ser o caminho. Solução definitiva: endpoint de
+// ativação no Gestor, pedido ao José.
+const OUVIR_ATIVACAO = `
+(function () {
+  if (window.__dimVidalink) return; window.__dimVidalink = true;
+  function avisar(ok) {
+    if (ok && window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ tipo: 'vidalink_ativado' }));
+    }
+  }
+  function ehAtivacao(url) { return typeof url === 'string' && /\/vidalink\/active(\?|$)/.test(url); }
+  var abrir = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (m, url) { this.__dimUrl = url; return abrir.apply(this, arguments); };
+  var enviar = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function () {
+    var x = this;
+    if (ehAtivacao(x.__dimUrl)) {
+      x.addEventListener('load', function () {
+        try { avisar(x.status >= 200 && x.status < 300 && JSON.parse(x.responseText).success === true); } catch (e) {}
+      });
+    }
+    return enviar.apply(this, arguments);
+  };
+  if (window.fetch) {
+    var f = window.fetch;
+    window.fetch = function (entrada) {
+      var url = typeof entrada === 'string' ? entrada : (entrada && entrada.url);
+      var p = f.apply(this, arguments);
+      if (ehAtivacao(url)) {
+        p.then(function (r) { return r.clone().json().then(function (j) { avisar(r.ok && j && j.success === true); }); })
+         .catch(function () {});
+      }
+      return p;
+    };
+  }
+})();
+true;`;
 
 // Domínios em que a navegação continua dentro da tela. O resto vai para fora.
 const DOMINIOS_DO_CLUBE = ['cartaodedescontos.com.br', 'drachei.com.br', 'dimmsaude.com.br'];
@@ -64,6 +113,25 @@ type Estado =
 
 export default function ClubeWeb() {
   const { destino } = useLocalSearchParams<{ destino?: string }>();
+  const { cliente, recarregar } = useSession();
+  // Um aviso por tela: a página pode reenviar a ativação, o app grava uma vez.
+  const jaGravou = useRef(false);
+
+  async function aoReceber(dado: string) {
+    let msg: { tipo?: unknown } | null = null;
+    try {
+      msg = JSON.parse(dado) as { tipo?: unknown };
+    } catch {
+      return; // mensagem de outro script da página: ignora
+    }
+    if (msg?.tipo !== 'vidalink_ativado' || jaGravou.current) return;
+    const cpf = String(cliente?.cpf ?? '').replace(/\D/g, '');
+    if (cpf.length !== 11) return;
+    jaGravou.current = true;
+    const r = await informarVidalink(cpf);
+    if (r.ok) void recarregar();
+    else jaGravou.current = false; // falhou: deixa tentar de novo se o site reenviar
+  }
   const alvo = destino ? DESTINOS[destino] : undefined;
   const [estado, setEstado] = useState<Estado>({ fase: 'pedindo' });
   const [carregandoPagina, setCarregandoPagina] = useState(true);
@@ -130,6 +198,9 @@ export default function ClubeWeb() {
           setEstado({ fase: 'pronto', url: alvo });
         }}
         onError={() => setEstado({ fase: 'erro', mensagem: 'O site do clube não respondeu.' })}
+        injectedJavaScriptBeforeContentLoaded={OUVIR_ATIVACAO}
+        injectedJavaScriptBeforeContentLoadedForMainFrameOnly
+        onMessage={(e) => void aoReceber(e.nativeEvent.data)}
         onShouldStartLoadWithRequest={(req) => {
           // 🔴 QUADROS EMBUTIDOS SEMPRE CARREGAM (bug de 23/09/2026). O site do clube usa
           // reCAPTCHA do Google num iframe; tratar o iframe como navegação mandava o endereço

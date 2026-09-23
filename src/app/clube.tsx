@@ -242,8 +242,10 @@ function BotaoClube({
 }
 
 function PassoVidalink() {
-  const { recarregar } = useSession();
-  const [numero, setNumero] = useState('');
+  const { cliente, recarregar } = useSession();
+  // O cartão Vidalink é o CPF do titular (site do clube, 23/09/2026). Normalmente o app grava
+  // sozinho ao detectar a ativação; esta tela é a reserva, e já vem com o CPF para confirmar.
+  const [numero, setNumero] = useState(String(cliente?.cpf ?? '').replace(/\D/g, ''));
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const digitos = numero.replace(/\D/g, '');
@@ -280,7 +282,10 @@ function PassoVidalink() {
           <Text style={s.passo}>1. Toque abaixo e informe a sua data de nascimento para gerar o cartão.</Text>
           <BotaoClube rotulo="Gerar meu cartão de farmácia" secundario destino="farmacia" />
 
-          <Text style={s.passo}>2. Volte aqui e digite o número do cartão gerado.</Text>
+          <Text style={s.passo}>
+            2. Depois de gerar, o cartão aparece aqui sozinho. Se não aparecer, confirme o número
+            abaixo (é o seu CPF) e salve.
+          </Text>
           <TextInput
             value={numero}
             onChangeText={setNumero}
@@ -325,7 +330,11 @@ function ClubePronto({ numero }: { numero: string }) {
             ao lado do seu cartão DIM+.
           </Text>
           <Text style={s.rotulo}>Nº DO CARTÃO</Text>
-          <Text style={s.numero}>{numero.replace(/(.{4})/g, '$1 ').trim()}</Text>
+          <Text style={s.numero}>
+            {numero.replace(/\D/g, '').length === 11
+              ? numero.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+              : numero.replace(/(.{4})/g, '$1 ').trim()}
+          </Text>
           <BotaoClube rotulo="Farmácias próximas" destino="farmacia" />
           <BotaoClube rotulo="Abrir o clube de descontos" secundario />
         </Card>

@@ -11,8 +11,16 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Pill } from '@/components/ui';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
-/** 1200000000000001 → 1200 0000 0000 0001 */
+// O cartão Vidalink é o CPF do titular (lido no site do clube em 23/09/2026): 11 dígitos saem
+// no formato do CPF, como o próprio cartão deles mostra. Outro tamanho segue em blocos de 4.
 function agruparCartao(n: string): string {
+  const d = n.replace(/\D/g, '');
+  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  return agruparCartaoEmBlocos(d);
+}
+
+/** 1200000000000001 → 1200 0000 0000 0001 */
+function agruparCartaoEmBlocos(n: string): string {
   return n.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
