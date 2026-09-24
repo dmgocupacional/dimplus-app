@@ -37,6 +37,7 @@ import {
   aderirClube,
   dispensarClubePorAgora,
   informarVidalink,
+  sincronizarClube,
   temWebView,
   type DadosAdesao,
   type Sexo,
@@ -369,6 +370,10 @@ function ImagemCartaoFarmacia() {
 // ── FIM BLOCO ──
 
 function ClubePronto({ numero, validade }: { numero: string; validade: string | null }) {
+  // Ao abrir o clube, o que mudou no ERP (dependentes, dados, plano) chega ao parceiro na hora.
+  useEffect(() => {
+    void sincronizarClube();
+  }, []);
   const hoje = new Date().toISOString().slice(0, 10);
   const vencido = !!validade && validade.slice(0, 10) < hoje;
   const validadeBr = validade ? validade.slice(0, 10).split('-').reverse().join('/') : null;

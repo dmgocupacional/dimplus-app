@@ -104,6 +104,14 @@ export function ligarPara(telefone: string): void {
  * Sem link (parceiro fora do ar, cadastro pendente lá) o app NÃO cai no portal genérico:
  * lá a pessoa teria de criar outra conta, que é justamente o que este fluxo elimina.
  */
+/**
+ * Pede ao erp para reconciliar a assinatura do cliente com o parceiro (dependentes, dados,
+ * plano). Silencioso: é manutenção, não bloqueia nem avisa — o cron de hora em hora cobre falhas.
+ */
+export async function sincronizarClube(): Promise<void> {
+  await chamarFeegow('/api/app/drachei/sincronizar', { method: 'POST', body: {} });
+}
+
 /** Pede ao erp um link de sessão novo. Quem chama usa uma vez e descarta. */
 export async function pedirLinkClube(): Promise<{ ok: true; url: string } | { ok: false; mensagem: string }> {
   const r = await chamarFeegow<{ url: string }>('/api/app/drachei/clube', { method: 'POST', body: {} });
