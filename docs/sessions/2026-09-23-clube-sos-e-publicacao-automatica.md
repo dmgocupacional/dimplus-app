@@ -75,3 +75,18 @@ App v4.12.1 → **v4.23.0**. Lado do ERP (elegibilidade, rotas do Dr. Achei, pri
 3. Layout de iPad (hoje é o de celular esticado) · SOS fora das capturas (web não tem GPS).
 4. O fluxo automático só rodou em teste, sem tocar nas lojas. A **primeira publicação real** por ele
    será a próxima versão — acompanhar de perto.
+
+## Adendo — 24/09/2026 (v4.24.0 → v4.25.0)
+
+- 🔴 **A tela Rede mostrava parceiros FICTÍCIOS** (Drogaria São Paulo, Droga Raia, Delboni, OdontoCare),
+  escritos à mão desde 31/07, e isso foi para a revisão da Apple na 4.23.0. Reescrita: as **6 unidades
+  DIMEG reais** (tabela `unidades`, com rota, ligação e atalho para agendar), o **localizador oficial de
+  farmácias Vidalink** (convênio `CT000560`) e o clube. Não voltar a listar empresa sem parceria real.
+- **SOS com mapa**: Leaflet + OpenStreetMap dentro do WebView que o binário já tem (origem
+  `dimmsaude.com.br` para respeitar a política do OSM), mais "Abrir no mapa".
+- **Cartão Vidalink oficial em imagem** na tela do clube, pelo ERP (`/api/app/drachei/cartao-farmacia`).
+- **OTA para os clientes**: novo workflow manual `ota-producao.yml` (canal `production`). Antes disso,
+  os apps das lojas não recebiam correção sem build. A 4.0.1 da loja e a 4.23.0 em revisão usam o mesmo
+  runtime e recebem esse OTA — por isso o workflow **barra import de módulo nativo no topo**. Publicado
+  duas vezes em 24/09 (Rede real + mapa; cartão oficial).
+- Dev build novo do iPhone: `f84b7cff`, v4.25.0 — traz a localização para testar o mapa.
