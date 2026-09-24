@@ -17,13 +17,23 @@
 // A pendência volta no próximo abrir.
 // → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts)
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
 import { consultarCEP } from '@/lib/auth';
 import {
   abrirClube,
+  abrirFarmaciasVidalink,
   aderirClube,
   dispensarClubePorAgora,
   informarVidalink,
@@ -31,6 +41,7 @@ import {
   type DadosAdesao,
   type Sexo,
 } from '@/lib/clube';
+import { API_BASE, supabase } from '@/lib/supabase';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
@@ -321,6 +332,42 @@ function PassoVidalink() {
   );
 }
 
+// ═══ IMAGEM OFICIAL DO CARTÃO (24/09/2026) ═══
+// O Gestor gera o cartão Vidalink em JPEG (nome, CPF, telefone de atendimento). O app mostra
+// essa imagem, pedida ao erp com o token da sessão — a chave do parceiro nunca vem para cá.
+// Se falhar (rede, parceiro fora do ar), o número em texto logo abaixo continua valendo.
+function ImagemCartaoFarmacia() {
+  const [fonte, setFonte] = useState<{ uri: string; headers: Record<string, string> } | null>(null);
+  const [falhou, setFalhou] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token;
+      if (!vivo || !token) return;
+      setFonte({
+        uri: `${API_BASE}/api/app/drachei/cartao-farmacia`,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  if (!fonte || falhou) return null;
+  return (
+    <Image
+      source={fonte}
+      style={s.cartaoImagem}
+      resizeMode="contain"
+      accessibilityLabel="Cartão de farmácia Vidalink"
+      onError={() => setFalhou(true)}
+    />
+  );
+}
+// ── FIM BLOCO ──
+
 function ClubePronto({ numero, validade }: { numero: string; validade: string | null }) {
   const hoje = new Date().toISOString().slice(0, 10);
   const vencido = !!validade && validade.slice(0, 10) < hoje;
@@ -330,6 +377,7 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
       <ScrollView contentContainerStyle={s.conteudo}>
         <Card>
           <Titulo>Seu cartão de farmácia</Titulo>
+          <ImagemCartaoFarmacia />
           <Text style={s.texto}>
             Apresente o cartão Vidalink na farmácia conveniada. Ele também está na tela inicial,
             ao lado do seu cartão DIM+.
@@ -347,7 +395,10 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
                 : `Válido até ${validadeBr}. Para manter ativo, continue acessando o clube.`}
             </Text>
           ) : null}
-          <BotaoClube rotulo="Farmácias próximas" destino="farmacia" />
+          {/* Localizador oficial da Vidalink, no convênio da DIMEG — é onde estão as farmácias. */}
+          <Pressable onPress={() => void abrirFarmaciasVidalink()} style={s.botao}>
+            <Text style={s.botaoTxt}>Farmácias próximas</Text>
+          </Pressable>
           <BotaoClube rotulo="Abrir o clube de descontos" secundario />
         </Card>
       </ScrollView>
@@ -357,6 +408,12 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
 
 const s = StyleSheet.create({
   conteudo: { paddingBottom: space.xl },
+  cartaoImagem: {
+    width: '100%',
+    aspectRatio: 1585 / 992, // proporção do JPEG que o Gestor devolve
+    borderRadius: radius.md,
+    marginTop: space.md,
+  },
   texto: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: space.sm },
   rotulo: {
     fontFamily: font.bold,
