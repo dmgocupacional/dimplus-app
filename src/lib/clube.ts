@@ -71,6 +71,30 @@ async function abrirUrl(url: string): Promise<void> {
 export type ResultadoAbrir = { ok: true } | { ok: false; mensagem: string };
 
 /**
+ * Localizador oficial de farmácias Vidalink, já no convênio da DIMEG (CT000560 — enviado pelo
+ * José, do Gestor GrupoSin, em 24/09/2026).
+ * ⚠️ O link original vinha com um código de sessão do servidor no meio ("(S(…))"), que expira.
+ * Sem ele, o servidor da Vidalink abre uma sessão nova. Não é página do clube: abre no
+ * navegador embutido, não na tela do clube (que só navega nos domínios do parceiro).
+ */
+export const URL_FARMACIAS_VIDALINK =
+  'https://www.vidalink.com.br/LocalizadorFarmaciaMedicamento/LocalizadorFarmacia.aspx?convenio=CT000560';
+
+export async function abrirFarmaciasVidalink(): Promise<void> {
+  await abrirUrl(URL_FARMACIAS_VIDALINK);
+}
+
+/** Rota até um endereço, no app de mapas do celular. */
+export function abrirRota(endereco: string): void {
+  void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(endereco)}`);
+}
+
+/** Discagem para um telefone (só dígitos). */
+export function ligarPara(telefone: string): void {
+  void Linking.openURL(`tel:${telefone}`);
+}
+
+/**
  * 23/09/2026 — o clube abre JÁ AUTENTICADO. O erp pede ao Gestor um link de sessão
  * (/auth/clube) e o app só redireciona: nada de segundo cadastro nem de senha do parceiro.
  *

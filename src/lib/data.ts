@@ -18,8 +18,8 @@ import type {
   Fatura,
   Modulo,
   ModuloKey,
-  Parceiro,
   PagamentoStatus,
+  UnidadeRede,
 } from './types';
 
 // ─── Cliente ────────────────────────────────────────────────────────────────
@@ -131,64 +131,44 @@ export async function getFaturas(): Promise<Fatura[]> {
   }));
 }
 
-// ─── Rede parceira ──────────────────────────────────────────────────────────
-// 🟡 AINDA MOCK, E DE PROPÓSITO. Não existe tabela de parceiros no banco (conferido no
-// schema em 31/07/2026: nada com `parceir%`/`rede%`). Criar uma agora, sem CRUD no ERP,
-// pariria uma tabela órfã — alguém teria que inserir farmácia por SQL, e o primeiro parceiro
-// novo já quebraria o processo. O par certo é `tabela + tela em /dashboard/parceiros + policy
-// de leitura pro cliente`, e isso é lote do erp-dimplus, não do app.
-//
-// Enquanto isso a tela mostra estes cinco com rodapé honesto ("rede em expansão").
-// Decisão do Henrique, 31/07/2026.
-const PARCEIROS: Parceiro[] = [
-  {
-    id: 'p1',
-    nome: 'Drogaria São Paulo',
-    categoria: 'Farmácia',
-    beneficio: 'Até 30% em genéricos',
-    endereco: 'Av. dos Autonomistas, 1400',
-    cidade: 'Osasco',
-  },
-  {
-    id: 'p2',
-    nome: 'Droga Raia',
-    categoria: 'Farmácia',
-    beneficio: 'Até 25% em medicamentos',
-    endereco: 'R. Antônio Agu, 210',
-    cidade: 'Osasco',
-  },
-  {
-    id: 'p3',
-    nome: 'Clínica DMG Ocupacional',
-    categoria: 'Clínica',
-    beneficio: 'Consulta com valor reduzido',
-    endereco: 'R. Narciso Sturlini, 88',
-    cidade: 'Osasco',
-  },
-  {
-    id: 'p4',
-    nome: 'Laboratório Delboni',
-    categoria: 'Laboratório',
-    beneficio: 'Exames a partir de R$ 19',
-    endereco: 'Av. Hilário Pereira de Souza, 500',
-    cidade: 'Osasco',
-  },
-  {
-    id: 'p5',
-    nome: 'OdontoCare Itapevi',
-    categoria: 'Odontologia',
-    beneficio: 'Limpeza + avaliação sem custo',
-    endereco: 'Av. Pres. Vargas, 77',
-    cidade: 'Itapevi',
-  },
-];
-
-export async function getRede(): Promise<Parceiro[]> {
-  return PARCEIROS;
+// ─── Rede ───────────────────────────────────────────────────────────────────
+// 24/09/2026 — FIM DO MOCK. Até aqui a tela mostrava cinco parceiros escritos à mão
+// (Drogaria São Paulo, Droga Raia, Delboni…) sem parceria nenhuma por trás — e isso chegou a
+// ir para a revisão da Apple na 4.23.0. A rede agora é só o que é real:
+//   · as unidades DIMEG, lidas de `unidades` (sincronizada da Feegow; policy de leitura para
+//     quem está logado criada nesta data);
+//   · o localizador oficial de farmácias Vidalink e o clube de descontos, na própria tela.
+// 🔴 Parceiro novo só entra com fonte real (tabela + cadastro no ERP). Não voltar a escrever
+// nome de empresa aqui.
+export async function getRede(): Promise<UnidadeRede[]> {
+  const { data, error } = await supabase
+    .from('unidades')
+    .select('unidade_id, nome, endereco, numero, bairro, cidade, estado, cep, telefone, agendamento_online')
+    .eq('ativo', true)
+    .order('unidade_id');
+  if (error || !data) return [];
+  return data.map((u) => ({
+    id: String(u.unidade_id),
+    nome: nomeUnidade(u.nome ?? ''),
+    endereco: [u.endereco, u.numero].filter(Boolean).join(', '),
+    bairro: u.bairro ?? '',
+    cidade: u.cidade ?? '',
+    uf: u.estado ?? '',
+    cep: u.cep ?? '',
+    telefone: (u.telefone ?? '').replace(/\D/g, '') || null,
+    agendaOnline: u.agendamento_online === true,
+  }));
 }
 
-/** A tela usa isto para mostrar o rodapé de "rede em expansão" sem chutar o motivo. */
-export const REDE_E_MOCK = true;
+/** "DIMEG OSASCO (Rua João Crudo, 120)" → "DIMEG Osasco": o endereço já vai na linha de baixo. */
+function nomeUnidade(bruto: string): string {
+  const semParenteses = bruto.replace(/\s*\(.*\)\s*$/, '').trim();
+  return semParenteses
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (c) => c.toUpperCase())
+    .replace(/\bDimeg\b/g, 'DIMEG')
+    .replace(/\bIi\b/g, 'II');
+}
 // ── FIM BLOCO ──
 
 // ─── Dependentes (S-C) ──────────────────────────────────────────────────────

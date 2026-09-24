@@ -26,7 +26,7 @@ import { isAdimplente, podeAcessar } from '@/lib/gate';
 import type { MotivoBloqueio } from '@/lib/gate';
 import { sair as authSair } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import type { AppAcesso, Cliente, Fatura, Modulo, ModuloKey, Parceiro } from '@/lib/types';
+import type { AppAcesso, Cliente, Fatura, Modulo, ModuloKey, UnidadeRede } from '@/lib/types';
 
 type Veredito = { pode: boolean; motivo: MotivoBloqueio };
 export type EstadoSessao = 'carregando' | 'deslogado' | 'aguardando' | 'pronto';
@@ -38,7 +38,7 @@ type SessionValue = {
   cliente: Cliente | null;
   modulos: Modulo[];
   faturas: Fatura[];
-  rede: Parceiro[];
+  rede: UnidadeRede[];
   /** Só as faturas: alimenta o Financeiro ("total em aberto"). */
   adimplente: boolean;
   /** Régua única (fn_elegibilidade): decide cadeado, selo do cartão e aviso da home. */
@@ -62,7 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [modulos, setModulos] = useState<Modulo[]>([]);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
-  const [rede, setRede] = useState<Parceiro[]>([]);
+  const [rede, setRede] = useState<UnidadeRede[]>([]);
   const [elegibilidade, setElegibilidade] = useState<Elegibilidade | null>(null);
   const [clube, setClube] = useState<CartaoClube | null>(null);
 

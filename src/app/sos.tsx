@@ -17,11 +17,13 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
+  TurboModuleRegistry,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +32,46 @@ import { Card } from '@/components/ui';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 const temLocalizacao = requireOptionalNativeModule('ExpoLocation') != null;
+// WebView só existe em binário a partir da 4.19; mesmo padrão de carga tardia do clube.
+const temWebView =
+  Platform.OS !== 'web' && TurboModuleRegistry?.get?.('RNCWebViewModule') != null;
+
+// ═══ MAPA DO SOS (24/09/2026) ═══
+// Mapa pequeno com o ponto da pessoa, desenhado com Leaflet + OpenStreetMap dentro do WebView
+// que o app já tem — sem módulo nativo novo e sem chave de API do Google. Só mostra; tocar no
+// botão "Abrir no mapa" leva ao app de mapas do celular. A atribuição do OSM é exigência da
+// licença deles e fica visível no canto do mapa.
+function htmlMapa(lat: number, lon: number): string {
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>html,body,#m{height:100%;margin:0}</style></head><body><div id="m"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var m=L.map('m',{zoomControl:false,attributionControl:true}).setView([${lat},${lon}],16);
+m.attributionControl.setPrefix(false);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);
+L.circleMarker([${lat},${lon}],{radius:9,color:'#FFFFFF',weight:3,fillColor:'#E24B4A',fillOpacity:1}).addTo(m);
+</script></body></html>`;
+}
+
+function MapaPonto({ lat, lon }: { lat: number; lon: number }) {
+  if (!temWebView) return null;
+  // require tardio de propósito — ver temWebView.
+  const { WebView } = require('react-native-webview') as typeof import('react-native-webview');
+  return (
+    <View style={s.mapa}>
+      <WebView
+        // baseUrl dá origem ao pedido dos mapas: a política de uso do OpenStreetMap pede
+        // Referer identificado, e HTML solto no WebView não teria nenhum.
+        source={{ html: htmlMapa(lat, lon), baseUrl: 'https://dimmsaude.com.br' }}
+        originWhitelist={['*']}
+        scrollEnabled={false}
+        style={s.mapaWeb}
+      />
+    </View>
+  );
+}
+// ── FIM BLOCO ──
 
 type Posicao = { lat: number; lon: number; precisao: number | null; endereco: string | null };
 
@@ -144,11 +186,16 @@ export default function Sos() {
 
         {local.fase === 'pronto' ? (
           <>
+            <MapaPonto lat={local.pos.lat} lon={local.pos.lon} />
             <Text style={s.endereco}>{local.pos.endereco ?? 'Endereço não identificado'}</Text>
             <Text style={s.nota}>
               Leia este endereço para o atendente.
               {local.pos.precisao ? ` Precisão aproximada de ${Math.round(local.pos.precisao)} m.` : ''}
             </Text>
+            <Pressable onPress={() => void Linking.openURL(linkMapa(local.pos))} style={s.botaoSec}>
+              <Ionicons name="map" size={16} color={color.navy} />
+              <Text style={s.botaoSecTxt}>Abrir no mapa</Text>
+            </Pressable>
             <Pressable onPress={() => void compartilhar()} style={s.botaoSec}>
               <Ionicons name="share-social" size={16} color={color.navy} />
               <Text style={s.botaoSecTxt}>Enviar minha localização para alguém</Text>
@@ -217,6 +264,15 @@ const s = StyleSheet.create({
   ligarNumero: { fontFamily: font.black, fontSize: size.xxl, color: color.white },
   ligarNome: { fontFamily: font.bold, fontSize: size.sm, color: color.white },
   rotulo: { fontFamily: font.bold, fontSize: 10, letterSpacing: 1, color: color.ink3 },
+  mapa: {
+    height: 180,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    marginTop: space.md,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  mapaWeb: { flex: 1 },
   linha: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
   endereco: { fontFamily: font.black, fontSize: size.lg, color: color.navy, marginTop: space.sm },
   texto: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: space.sm },

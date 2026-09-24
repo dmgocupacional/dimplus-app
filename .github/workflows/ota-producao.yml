@@ -1,0 +1,49 @@
+name: OTA para os clientes (production)
+
+# 24/09/2026. O workflow "Publicar no Expo Go" publica a cada push só no canal `preview` (o dev
+# build). Os apps das lojas estão no canal `production` e NÃO recebiam correção nenhuma sem build
+# novo. Este disparo manual leva o JavaScript atual para os clientes — nunca automático a cada
+# commit, para trabalho em andamento não cair direto no celular de quem usa.
+#
+# 🔴 Só JavaScript. Mudança nativa (módulo novo, permissão, app.json do binário) exige build de
+# loja. Módulo nativo novo tem de ser carregado de forma TARDIA e com checagem de presença: a
+# 4.0.1 da App Store (08/09) não tem expo-web-browser, react-native-webview nem expo-location, e
+# um import no topo derrubaria o app de quem ainda está nela.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mensagem:
+        description: O que muda para o cliente
+        type: string
+        required: true
+
+concurrency:
+  group: ota-producao
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: EAS Update production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Nenhum módulo nativo importado no topo
+        run: |
+          if grep -rnE "^import .*['\"](expo-web-browser|react-native-webview|expo-location)['\"]" src; then
+            echo "::error::Módulo nativo importado no topo derrubaria a 4.0.1 da loja. Carregue de forma tardia."
+            exit 1
+          fi
+      - name: Publicar para os clientes
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_SKIP_AUTO_FINGERPRINT: '1'
+          MENSAGEM: ${{ inputs.mensagem }}
+        run: npx eas-cli@latest update --branch production --environment production --message "$MENSAGEM" --non-interactive

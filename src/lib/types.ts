@@ -103,13 +103,17 @@ export type Fatura = {
   link_pagamento: string | null;
 };
 
-export type Parceiro = {
+/** Unidade DIMEG listada na tela Rede (tabela `unidades`, sincronizada da Feegow). */
+export type UnidadeRede = {
   id: string;
   nome: string;
-  categoria: 'Farmácia' | 'Clínica' | 'Laboratório' | 'Odontologia';
-  beneficio: string;
   endereco: string;
+  bairro: string;
   cidade: string;
+  uf: string;
+  cep: string;
+  telefone: string | null;
+  agendaOnline: boolean;
 };
 // ── FIM BLOCO ──
 
