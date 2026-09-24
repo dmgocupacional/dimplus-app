@@ -167,7 +167,8 @@ function nomeUnidade(bruto: string): string {
     .toLowerCase()
     .replace(/(^|\s)\S/g, (c) => c.toUpperCase())
     .replace(/\bDimeg\b/g, 'DIMEG')
-    .replace(/\bIi\b/g, 'II');
+    .replace(/\bIi\b/g, 'II')
+    .replace(/\bClinica\b/g, 'Clínica'); // a Feegow grava sem acento
 }
 // ── FIM BLOCO ──
 
