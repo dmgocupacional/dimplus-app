@@ -36,7 +36,6 @@ import {
   abrirFarmaciasVidalink,
   aderirClube,
   dispensarClubePorAgora,
-  informarVidalink,
   sincronizarClube,
   temWebView,
   type DadosAdesao,
@@ -56,7 +55,9 @@ export default function AdesaoClube() {
   if (clube && clube.cartao_vidalink) {
     return <ClubePronto numero={clube.cartao_vidalink} validade={clube.vidalink_validade} />;
   }
-  if (clube) return <PassoVidalink />;
+  // 25/09/2026 — sem passo manual: quem aderiu e ainda não tem o cartão Vidalink gravado fica
+  // aqui enquanto o erp ATIVA o cartão sozinho (ver erp: lib/drachei-vidalink.ts).
+  if (clube) return <AtivandoCartao />;
   return <PassoAdesao />;
 }
 
@@ -135,7 +136,12 @@ function PassoAdesao() {
       setErro(r.mensagem);
       return;
     }
-    recarregar();
+    // O erp cria a assinatura e ATIVA o cartão Vidalink na reconciliação. Esperar aqui faz o
+    // cartão já aparecer pronto no início, em vez de "sem cartão" por alguns segundos.
+    setEnviando(true);
+    await sincronizarClube();
+    await recarregar();
+    setEnviando(false);
     router.replace('/' as never);
   }
 
@@ -255,83 +261,55 @@ function BotaoClube({
   );
 }
 
-function PassoVidalink() {
-  const { cliente, recarregar } = useSession();
-  // O cartão Vidalink é o CPF do titular (site do clube, 23/09/2026). Normalmente o app grava
-  // sozinho ao detectar a ativação; esta tela é a reserva, e já vem com o CPF para confirmar.
-  const [numero, setNumero] = useState(String(cliente?.cpf ?? '').replace(/\D/g, ''));
-  const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const digitos = numero.replace(/\D/g, '');
+// ═══ BLOCO: ATIVANDO O CARTÃO ═══
+// 25/09/2026 — substitui o antigo "gere seu cartão no site". A pessoa não faz nada: o erp ativa
+// o cartão Vidalink (data de nascimento do cadastro) e esta tela só espera e mostra o resultado.
+// Se não der, explica e deixa seguir para o app — nunca prende.
+function AtivandoCartao() {
+  const { recarregar } = useSession();
+  const [falhou, setFalhou] = useState(false);
 
-  async function salvar() {
-    if (enviando || digitos.length < 8) return;
-    setEnviando(true);
-    setErro(null);
-    const r = await informarVidalink(digitos);
-    setEnviando(false);
-    if (!r.ok) {
-      setErro(r.mensagem);
-      return;
-    }
-    recarregar();
-    router.replace('/' as never);
+  async function tentar() {
+    setFalhou(false);
+    await sincronizarClube();
+    await recarregar();
+    // Se o cartão entrou, a tela troca sozinha para o cartão pronto (clube.cartao_vidalink).
+    setFalhou(true);
   }
 
-  function agoraNao() {
-    dispensarClubePorAgora();
-    router.replace('/' as never);
-  }
+  useEffect(() => {
+    void tentar();
+  }, []);
 
   return (
     <Screen titulo="Clube de descontos">
-      <ScrollView contentContainerStyle={s.conteudo} keyboardShouldPersistTaps="handled">
-        <Card>
-          <Titulo>Gere seu cartão de farmácia</Titulo>
-          <Text style={s.texto}>
-            O desconto nas farmácias vale com o cartão Vidalink. Ele é gerado dentro do clube,
-            em dois passos:
-          </Text>
-
-          <Text style={s.passo}>1. Toque abaixo e informe a sua data de nascimento para gerar o cartão.</Text>
-          <BotaoClube rotulo="Gerar meu cartão de farmácia" secundario destino="farmacia" />
-
-          <Text style={s.passo}>
-            2. Depois de gerar, o cartão aparece aqui sozinho. Se não aparecer, confirme o número
-            abaixo (é o seu CPF) e salve.
-          </Text>
-          <TextInput
-            value={numero}
-            onChangeText={setNumero}
-            placeholder="Número do cartão"
-            placeholderTextColor={color.ink3}
-            keyboardType="number-pad"
-            maxLength={24}
-            style={s.campo}
-          />
-
-          {erro ? <Aviso texto={erro} /> : null}
-
-          <Pressable
-            onPress={salvar}
-            disabled={digitos.length < 8 || enviando}
-            style={[s.botao, (digitos.length < 8 || enviando) && s.botaoOff]}
-          >
-            {enviando ? (
-              <ActivityIndicator color={color.navy} />
-            ) : (
-              <Text style={s.botaoTxt}>Salvar meu cartão</Text>
-            )}
-          </Pressable>
-
-          <Pressable onPress={agoraNao} disabled={enviando} style={s.depois}>
-            <Text style={s.depoisTxt}>Agora não</Text>
-          </Pressable>
-        </Card>
-      </ScrollView>
+      <Card style={s.centroCard}>
+        {!falhou ? (
+          <>
+            <ActivityIndicator color={color.navy} />
+            <Titulo>Ativando seu cartão de farmácia</Titulo>
+            <Text style={s.texto}>Leva só alguns segundos.</Text>
+          </>
+        ) : (
+          <>
+            <Titulo>Não conseguimos ativar agora</Titulo>
+            <Text style={s.texto}>
+              O parceiro não respondeu. Tentamos de novo sozinhos em instantes — você pode seguir
+              usando o app.
+            </Text>
+            <Pressable onPress={() => void tentar()} style={s.botao}>
+              <Text style={s.botaoTxt}>Tentar de novo</Text>
+            </Pressable>
+          </>
+        )}
+      </Card>
+      <Pressable onPress={sairDoClube} style={s.continuar}>
+        <Text style={s.continuarTxt}>Continuar para o app</Text>
+      </Pressable>
     </Screen>
   );
 }
+// ── FIM BLOCO ──
 
 // ═══ IMAGEM OFICIAL DO CARTÃO (24/09/2026) ═══
 // O Gestor gera o cartão Vidalink em JPEG (nome, CPF, telefone de atendimento). O app mostra
@@ -419,6 +397,9 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
 }
 
 function sairDoClube() {
+  // Dispensa a trava do clube nesta sessão: sem isso, se o cartão ainda não foi ativado, a trava
+  // de entrada mandaria a pessoa de volta para cá assim que saísse — um ciclo sem fim.
+  dispensarClubePorAgora();
   if (router.canGoBack()) router.back();
   else router.replace('/' as never);
 }
@@ -470,6 +451,7 @@ const s = StyleSheet.create({
   depois: { marginTop: space.md, alignItems: 'center', paddingVertical: space.sm },
   depoisTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.ink3 },
   passo: { fontFamily: font.bold, fontSize: size.sm, color: color.navy, marginTop: space.xl },
+  centroCard: { alignItems: 'center', gap: space.md, paddingVertical: space.xl },
   continuar: { marginTop: space.lg, paddingVertical: space.md, alignItems: 'center' },
   continuarTxt: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
   botaoSec: {
