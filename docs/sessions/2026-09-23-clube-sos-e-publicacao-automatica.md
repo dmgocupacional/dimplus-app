@@ -90,3 +90,13 @@ App v4.12.1 → **v4.23.0**. Lado do ERP (elegibilidade, rotas do Dr. Achei, pri
   runtime e recebem esse OTA — por isso o workflow **barra import de módulo nativo no topo**. Publicado
   duas vezes em 24/09 (Rede real + mapa; cartão oficial).
 - Dev build novo do iPhone: `f84b7cff`, v4.25.0 — traz a localização para testar o mapa.
+
+### Adendo — 25/09/2026 (v4.25.2)
+- 🔴 **Presos depois de ativar o cartão Vidalink** (relato do Henrique e do Pedro). A tela do clube é
+  aberta pela trava com `router.replace` e nasce sem histórico, e a tela do cartão pronto não tinha
+  saída; a trava ainda só liberava `clube`, não `clube-web`. Corrigido: trava libera as duas, botão
+  "Continuar para o app" e faixa "Voltar ao app" no site do clube. Publicado nos dois canais.
+- 🔴 Regra que vale para toda tela aberta por trava: **sempre ter uma saída explícita**, porque sem
+  histórico não há seta de voltar.
+- Chave Android `dimeg-upload` cadastrada no EAS (padrão do pacote). Dev build Android `8e1314dc`
+  (Thiago) e dev build iOS `c6f5b824` com o iPhone do Pedro cadastrado.
