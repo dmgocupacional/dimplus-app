@@ -160,8 +160,10 @@ export default function ClubeWeb() {
       if (jaGravou.current) return;
       jaGravou.current = true;
       const r = await informarVidalink(cpf);
-      if (r.ok) void recarregar();
-      else jaGravou.current = false; // falhou: deixa tentar de novo se o site reenviar
+      if (r.ok) {
+        void recarregar();
+        setAtivado(true); // mostra a faixa de saída — ver BLOCO FAIXA DE CARTÃO ATIVADO
+      } else jaGravou.current = false; // falhou: deixa tentar de novo se o site reenviar
       return;
     }
 
@@ -181,6 +183,8 @@ export default function ClubeWeb() {
   const alvo = destino ? DESTINOS[destino] : undefined;
   const [estado, setEstado] = useState<Estado>({ fase: 'pedindo' });
   const [carregandoPagina, setCarregandoPagina] = useState(true);
+  // 25/09/2026 — depois de ativar o cartão, a pessoa não sabia como sair do site e voltar ao app.
+  const [ativado, setAtivado] = useState(false);
   // Garante um único salto para o destino: depois dele, a pessoa navega livre pelo clube.
   const jaSaltou = useRef(false);
 
@@ -286,12 +290,40 @@ export default function ClubeWeb() {
           <ActivityIndicator color={color.navy} />
         </View>
       ) : null}
+      {/* ═══ BLOCO: FAIXA DE CARTÃO ATIVADO ═══ */}
+      {ativado ? (
+        <View style={s.faixa}>
+          <Text style={s.faixaTxt}>Cartão de farmácia ativado. Ele já aparece no seu app.</Text>
+          <Pressable onPress={() => router.replace('/' as never)} style={s.faixaBotao}>
+            <Text style={s.faixaBotaoTxt}>Voltar ao app</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {/* ── FIM BLOCO ── */}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   tela: { flex: 1, backgroundColor: color.white },
+  faixa: {
+    position: 'absolute',
+    left: space.md,
+    right: space.md,
+    bottom: space.xl,
+    backgroundColor: color.navy,
+    borderRadius: radius.md,
+    padding: space.md,
+    gap: space.sm,
+  },
+  faixaTxt: { fontFamily: font.regular, fontSize: size.sm, color: color.white },
+  faixaBotao: {
+    backgroundColor: color.green,
+    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    alignItems: 'center',
+  },
+  faixaBotaoTxt: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
   web: { flex: 1 },
   carregando: {
     position: 'absolute',

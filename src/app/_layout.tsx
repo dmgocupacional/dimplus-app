@@ -105,7 +105,11 @@ function Roteador() {
     // 21/09/2026: o cartão Vidalink faz parte da mesma trava — sem ele não há desconto em
     // farmácia. Só com a assinatura ATIVA (inativa é caso financeiro, não de cadastro).
     const faltaVidalink = !!clube && clube.ativa && !clube.cartao_vidalink;
-    if ((clube === null || faltaVidalink) && partes[0] !== 'clube' && !clubeDispensado()) {
+    // 25/09/2026: a tela do site do clube (`clube-web`) também é liberada. É nela que a pessoa
+    // gera o cartão Vidalink; a trava via "falta o cartão" e a jogava de volta para /clube a
+    // cada mudança de tela, no meio da ativação.
+    const noClube = partes[0] === 'clube' || partes[0] === 'clube-web';
+    if ((clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
       router.replace('/clube' as never);
       return;
     }

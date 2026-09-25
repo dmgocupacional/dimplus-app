@@ -406,9 +406,21 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
           </Pressable>
           <BotaoClube rotulo="Abrir o clube de descontos" secundario />
         </Card>
+        {/* 25/09/2026 — saída obrigatória. Esta tela costuma ser aberta pela trava de entrada
+            com router.replace, e aí NASCE SEM HISTÓRICO: sem seta de voltar e, antes, sem botão
+            nenhum para o início. Depois de ativar o cartão a pessoa ficava presa e tinha de
+            fechar o app. Volta se houver para onde; senão vai para o início. */}
+        <Pressable onPress={sairDoClube} style={s.continuar}>
+          <Text style={s.continuarTxt}>Continuar para o app</Text>
+        </Pressable>
       </ScrollView>
     </Screen>
   );
+}
+
+function sairDoClube() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/' as never);
 }
 
 const s = StyleSheet.create({
@@ -458,6 +470,8 @@ const s = StyleSheet.create({
   depois: { marginTop: space.md, alignItems: 'center', paddingVertical: space.sm },
   depoisTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.ink3 },
   passo: { fontFamily: font.bold, fontSize: size.sm, color: color.navy, marginTop: space.xl },
+  continuar: { marginTop: space.lg, paddingVertical: space.md, alignItems: 'center' },
+  continuarTxt: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
   botaoSec: {
     marginTop: space.sm,
     borderWidth: 1,

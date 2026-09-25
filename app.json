@@ -2,7 +2,7 @@
   "expo": {
     "name": "DIM+ Saúde",
     "slug": "dimplus",
-    "version": "4.25.1",
+    "version": "4.25.2",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "scheme": "dimplus",
