@@ -232,7 +232,8 @@ export default function Inicio() {
 
         <Titulo>Acesso rápido</Titulo>
         <View style={s.grade}>
-          {ATALHOS.filter((a) => incluiClube || (a.key !== 'clube' && a.key !== 'telemedicina')).map((a) => {
+          {ATALHOS.filter((a) => (incluiClube || (a.key !== 'clube' && a.key !== 'telemedicina'))
+            && !(a.key === 'financeiro' && beneficios?.plano?.forma_cobranca === 'faturado_empresa')).map((a) => {
             const m = modulo(a.key);
             const veredito = pode(a.key);
             // Admin abre também o que está "em breve" (é assim que se testa antes de ligar).

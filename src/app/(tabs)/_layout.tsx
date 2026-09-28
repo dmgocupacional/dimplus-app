@@ -1,13 +1,18 @@
 // ═══ BLOCO: TAB BAR ═══
-// 4 abas, exatamente como o mockup aprovado. Cartão digital mora na Início.
+// 5 abas desde 28/09/2026 (Família entrou). Cartão digital mora na Início.
+// Plano FATURADO PARA A EMPRESA (Vigent) não tem Financeiro: a pessoa não tem fatura — some a aba.
 // Ajuda é tela interna (entra pelo Perfil e pelo card de suporte da Início).
 
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
+import { useSession } from '@/state/session';
 import { color, font } from '@/theme/tokens';
 
 export default function TabsLayout() {
+  // Segue o plano visto na tela (inclusive o "ver como" do admin).
+  const { beneficios } = useSession();
+  const semFinanceiro = beneficios?.plano?.forma_cobranca === 'faturado_empresa';
   return (
     <Tabs
       screenOptions={{
@@ -41,6 +46,7 @@ export default function TabsLayout() {
         name="financeiro"
         options={{
           title: 'Financeiro',
+          href: semFinanceiro ? null : undefined,
           tabBarIcon: ({ color: c, size }) => <Ionicons name="receipt" size={size} color={c} />,
         }}
       />
