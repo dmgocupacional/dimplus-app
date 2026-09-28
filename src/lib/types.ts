@@ -144,6 +144,10 @@ export type Dependente = {
    */
   data_nascimento: string | null;
   app_acesso: AppAcesso;
+  /** 28/09/2026 — carteirinha do dependente (raiz do titular + "-NN"). */
+  numero_carteirinha?: string | null;
+  /** 28/09/2026 — plano empresarial: último dia de acesso quando o desligamento foi comunicado. */
+  vinculo_fim?: string | null;
 };
 
 /**

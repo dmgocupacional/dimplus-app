@@ -210,6 +210,9 @@ export async function getMeusDependentes(): Promise<MeusDependentes> {
     pode_adicionar: boolean | null;
     politica: string | null;
     valor_unitario: number | string | null;
+    // 28/09/2026 — Família: carteirinha do dependente e último dia de acesso (plano empresarial).
+    numero_carteirinha?: string | null;
+    vinculo_fim?: string | null;
   }[];
 
   // A situação vem repetida em toda linha (cross join no banco). Ler da primeira.
@@ -230,6 +233,8 @@ export async function getMeusDependentes(): Promise<MeusDependentes> {
     parentesco: l.parentesco ?? null,
     data_nascimento: l.data_nascimento ?? null,
     app_acesso: (l.app_acesso ?? 'bloqueado') as Dependente['app_acesso'],
+    numero_carteirinha: l.numero_carteirinha ?? null,
+    vinculo_fim: l.vinculo_fim ?? null,
   }));
 
   return { lista, situacao };

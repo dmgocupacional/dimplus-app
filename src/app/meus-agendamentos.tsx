@@ -15,6 +15,10 @@
 // ele não dá pra buscar novos horários daquele profissional sem re-listar a agenda
 // inteira (payload gigante, §2 do FEEGOW-LEITURA). Sem `profissionalId`, o caminho é
 // cancelar e marcar de novo por `/agendar`.
+// 28/09/2026 · Sprint B — consulta que usa inclusa ganha faixa amarela com o prazo de 24h, e
+// cancelar/remarcar em cima da hora avisa que desconta. → BLOCO: BENEFÍCIOS INCLUSOS
+import { formatarQuando, passouDoPrazo, reservadasPorAgendamento } from '@/lib/beneficios';
+import { useSession } from '@/state/session';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -101,6 +105,8 @@ export default function MeusAgendamentos() {
   const [carga, setCarga] = useState<Carga>({ estado: 'carregando' });
   const [cancelando, setCancelando] = useState<number | null>(null);
   const [remarcacao, setRemarcacao] = useState<Remarcacao | null>(null);
+  const { beneficios, recarregarBeneficios } = useSession();
+  const reservadas = reservadasPorAgendamento(beneficios);
 
   const carregar = useCallback(async () => {
     setCarga({ estado: 'carregando' });
@@ -150,11 +156,21 @@ export default function MeusAgendamentos() {
   useFocusEffect(
     useCallback(() => {
       void carregar();
-    }, [carregar])
+      void recarregarBeneficios();
+    }, [carregar, recarregarBeneficios])
   );
 
+  /** Texto extra quando a ação desconta a consulta inclusa (menos de 24h). */
+  function avisoInclusa(a: MeuAgendamento, acao: 'cancelar' | 'remarcar'): string {
+    const mov = reservadas.get(a.id);
+    if (!mov) return '';
+    return passouDoPrazo(mov.prazo_sem_perda)
+      ? `\n\nFaltam menos de 24h: ${acao} agora DESCONTA esta consulta inclusa.`
+      : `\n\nComo faltam mais de 24h, a consulta inclusa volta para o seu saldo.`;
+  }
+
   function confirmarCancelamento(a: MeuAgendamento) {
-    Alert.alert('Cancelar agendamento?', 'Isso libera o horário na agenda da clínica. Não dá pra desfazer.', [
+    Alert.alert('Cancelar agendamento?', `Isso libera o horário na agenda da clínica. Não dá pra desfazer.${avisoInclusa(a, 'cancelar')}`, [
       { text: 'Voltar', style: 'cancel' },
       { text: 'Cancelar agendamento', style: 'destructive', onPress: () => executarCancelamento(a) },
     ]);
@@ -169,6 +185,7 @@ export default function MeusAgendamentos() {
       return;
     }
     void carregar();
+    void recarregarBeneficios();
   }
 
   async function iniciarRemarcacao(a: MeuAgendamento) {
@@ -204,7 +221,7 @@ export default function MeusAgendamentos() {
   ) {
     Alert.alert(
       'Remarcar agendamento?',
-      `Novo horário: ${formatData(slot.data)} às ${slot.horario.slice(0, 5)}. O horário atual é liberado na agenda.`,
+      `Novo horário: ${formatData(slot.data)} às ${slot.horario.slice(0, 5)}. O horário atual é liberado na agenda.${avisoInclusa(agendamento, 'remarcar')}`,
       [
         { text: 'Voltar', style: 'cancel' },
         { text: 'Confirmar', onPress: () => executarRemarcacao(agendamento, slot, slotsRestantes) },
@@ -354,6 +371,28 @@ export default function MeusAgendamentos() {
                 {status ? <Pill texto={status.texto} tom={status.tom} /> : null}
               </View>
 
+              {reservadas.has(a.id) ? (() => {
+                const mov = reservadas.get(a.id)!;
+                const tarde = passouDoPrazo(mov.prazo_sem_perda);
+                return (
+                  <View style={[s.inclusa, tarde && s.inclusaTarde]}>
+                    <Text style={s.inclusaTitulo}>Usa 1 consulta inclusa do seu plano</Text>
+                    {mov.unidade ? (
+                      <Text style={s.inclusaSub}>
+                        {mov.unidade.nome}{mov.unidade.endereco ? ` · ${mov.unidade.endereco}` : ''}
+                      </Text>
+                    ) : null}
+                    <Text style={s.inclusaPrazo}>
+                      {tarde
+                        ? 'Menos de 24h: se faltar ou cancelar agora, a consulta é descontada.'
+                        : mov.prazo_sem_perda
+                          ? `Cancele ou remarque até ${formatarQuando(mov.prazo_sem_perda)} sem perder.`
+                          : 'Se faltar, a consulta é descontada.'}
+                    </Text>
+                  </View>
+                );
+              })() : null}
+
               {mostrarAcoes ? (
                 <View style={s.acoes}>
                   {a.profissionalId !== null ? (
@@ -430,5 +469,18 @@ const s = StyleSheet.create({
     borderColor: color.greenDeep,
   },
   chipHoraTexto: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
+  inclusa: {
+    marginTop: space.md,
+    backgroundColor: color.warningBg,
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: color.warning,
+    padding: space.md,
+    gap: 2,
+  },
+  inclusaTarde: { borderLeftColor: color.danger },
+  inclusaTitulo: { fontFamily: font.bold, fontSize: size.sm, color: color.ink },
+  inclusaSub: { fontFamily: font.regular, fontSize: size.xs, color: color.ink2 },
+  inclusaPrazo: { fontFamily: font.bold, fontSize: size.xs, color: color.navy, marginTop: 4 },
 });
 // ── FIM BLOCO ──

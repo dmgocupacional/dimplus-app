@@ -13,6 +13,11 @@ export type FormaPagamento = 'BOLETO' | 'PIX' | 'CREDIT_CARD';
 
 export type TermoPendente = {
   pendente: boolean;
+  /** 28/09/2026 — quem paga. 'empresa' (plano faturado) e 'sem_custo' não escolhem vencimento. */
+  custeio?: 'pessoa' | 'empresa' | 'sem_custo';
+  entidade_nome?: string | null;
+  /** true = a caixa de consentimento de saúde separada é obrigatória. */
+  exige_consentimento_saude?: boolean;
   termo?: { id: string; versao: string; texto: string };
   plano?: { nome: string; valor_mensal: number; valor_adesao: number };
 };
@@ -28,13 +33,23 @@ export type ResultadoAceite =
   | { ok: true; cobranca: 'assinatura' | 'entidade' | 'pendente'; aviso?: string }
   | { ok: false; mensagem: string };
 
-export async function aceitarTermo(
-  dia: DiaVencimento,
-  forma: FormaPagamento,
-): Promise<ResultadoAceite> {
+export async function aceitarTermo(opcoes: {
+  /** Só quando a pessoa paga. */
+  dia?: DiaVencimento;
+  forma?: FormaPagamento;
+  /** Caixa separada de dados de saúde (termo empresarial 9.8). */
+  consentimentoSaude?: boolean;
+}): Promise<ResultadoAceite> {
   const r = await chamarFeegow<{ ok: boolean; cobranca?: string; aviso?: string }>(
     '/api/app/contrato/aceite',
-    { method: 'POST', body: { dia_vencimento: dia, forma_pagamento: forma } },
+    {
+      method: 'POST',
+      body: {
+        ...(opcoes.dia ? { dia_vencimento: opcoes.dia } : {}),
+        ...(opcoes.forma ? { forma_pagamento: opcoes.forma } : {}),
+        ...(opcoes.consentimentoSaude !== undefined ? { consentimento_saude: opcoes.consentimentoSaude } : {}),
+      },
+    },
   );
   if (!r.ok) return { ok: false, mensagem: r.mensagem };
   return {

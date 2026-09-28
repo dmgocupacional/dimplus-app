@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 
 import { getCartaoClube, type CartaoClube } from '@/lib/clube';
+import { buscarBeneficios, type MeusBeneficios } from '@/lib/beneficios';
 import { getCliente, getElegibilidade, getFaturas, getModulos, getRede } from '@/lib/data';
 import type { Elegibilidade } from '@/lib/data';
 import { buscarTermoPendente } from '@/lib/contrato';
@@ -45,6 +46,11 @@ type SessionValue = {
   elegivel: boolean;
   /** Cartão de descontos em farmácias; null = ainda não aderiu (ou falha de leitura). */
   clube: CartaoClube | null;
+  /** 28/09/2026 — inclusos do plano (saldo, agendadas) + se o plano inclui o clube. null = não carregou. */
+  beneficios: MeusBeneficios | null;
+  /** false só quando o erp CONFIRMA que o plano não inclui o clube (ex.: DIM+ Vigent). */
+  incluiClube: boolean;
+  recarregarBeneficios: () => Promise<void>;
   acesso: AppAcesso;
   /** true = há termo publicado esperando aceite. null = ainda não se sabe (não bloqueia). */
   aceitePendente: boolean | null;
@@ -65,8 +71,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [rede, setRede] = useState<UnidadeRede[]>([]);
   const [elegibilidade, setElegibilidade] = useState<Elegibilidade | null>(null);
   const [clube, setClube] = useState<CartaoClube | null>(null);
+  const [beneficios, setBeneficios] = useState<MeusBeneficios | null>(null);
 
   const limpar = useCallback(() => {
+    setBeneficios(null);
     setCliente(null);
     setModulos([]);
     setFaturas([]);
@@ -85,13 +93,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setEstado('aguardando');
       return;
     }
-    const [m, f, r, e, cl] = await Promise.all([
+    const [m, f, r, e, cl, bn] = await Promise.all([
       getModulos(),
       getFaturas(),
       getRede(),
       getElegibilidade(),
       getCartaoClube(),
+      buscarBeneficios(),
     ]);
+    setBeneficios(bn);
     setCliente(c);
     setModulos(m);
     setFaturas(f);
@@ -167,6 +177,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [modulos, acesso, elegivel]
   );
 
+  const recarregarBeneficios = useCallback(async () => {
+    const bn = await buscarBeneficios();
+    if (bn) setBeneficios(bn); // falha de rede não apaga o que já estava na tela
+  }, []);
+
   const sair = useCallback(async () => {
     await authSair();
     limpar();
@@ -185,6 +200,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     adimplente,
     elegivel,
     clube,
+    beneficios,
+    // Falha de leitura (null) NÃO esconde o clube: só o "não inclui" confirmado pelo erp.
+    incluiClube: beneficios?.plano?.inclui_clube !== false,
+    recarregarBeneficios,
     acesso,
     pode,
     modulo,

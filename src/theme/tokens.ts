@@ -20,6 +20,7 @@ export const color = {
 
   danger: '#E24B4A',
   warning: '#EF9F27',
+  warningBg: '#FFF7E6', // fundo de aviso (consulta inclusa reservada, consentimento)
 
   ink: '#202745', // texto forte
   ink2: '#5E6577', // texto médio

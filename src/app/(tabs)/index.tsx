@@ -1,8 +1,8 @@
 // ═══ BLOCO: TELA — INÍCIO ═══
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { useRef, useState } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import { CartaoClube } from '@/components/CartaoClube';
+import { InclusosCard } from '@/components/InclusosCard';
 import { CartaoDigital } from '@/components/CartaoDigital';
 import { Aviso, Card, Screen, Tile, Titulo } from '@/components/ui';
 import { abrirTelemedicina } from '@/lib/clube';
@@ -66,7 +67,7 @@ const ATALHOS: Atalho[] = [
 const ESPIADA = 28;
 
 export default function Inicio() {
-  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo, beneficios, incluiClube, recarregarBeneficios } = useSession();
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<string | null>(null);
   const [abrindoTele, setAbrindoTele] = useState(false);
@@ -77,7 +78,10 @@ export default function Inicio() {
   // do cartão e há pontos + nome do cartão visível. Com um cartão só, nada disso aparece.
   const carrosselRef = useRef<ScrollView>(null);
   const [pagina, setPagina] = useState(0);
-  const temClube = !!clube;
+  // 28/09/2026 — plano sem clube (DIM+ Vigent): nem o cartão de farmácia nem o atalho aparecem.
+  const temClube = !!clube && incluiClube;
+  // Saldo e agendadas mudam fora da home (agendar, cancelar, balcão): relê ao voltar para cá.
+  useFocusEffect(useCallback(() => { void recarregarBeneficios(); }, [recarregarBeneficios]));
   const larguraCartao = width - space.lg * 2 - (temClube ? ESPIADA : 0);
   const passo = larguraCartao + space.md;
   // ── FIM BLOCO ──
@@ -216,9 +220,11 @@ export default function Inicio() {
           <Aviso texto="Seu acesso ao app ainda não foi liberado. Fale com a central de atendimento." />
         ) : null}
 
+        <InclusosCard dados={beneficios} />
+
         <Titulo>Acesso rápido</Titulo>
         <View style={s.grade}>
-          {ATALHOS.map((a) => {
+          {ATALHOS.filter((a) => incluiClube || (a.key !== 'clube' && a.key !== 'telemedicina')).map((a) => {
             const m = modulo(a.key);
             const veredito = pode(a.key);
             const emBreve = !!m && !m.ativo;

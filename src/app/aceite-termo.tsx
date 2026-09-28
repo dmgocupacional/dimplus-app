@@ -10,6 +10,10 @@
 // mesmas três datas do termo em papel (10/20/30), para não criar um quarto dia de
 // vencimento na base.
 //
+// 28/09/2026 — plano FATURADO para a empresa (Vigent) e colaborador DIMEG não escolhem vencimento
+// nem forma: quem paga não é a pessoa. E o termo que exige consentimento de saúde ganha uma
+// caixa PRÓPRIA, separada do aceite geral (contrato Vigent 9.3 / termo empresarial 9.8).
+//
 // ⚠️ Falha ao carregar NÃO vira "não há termo". A lib devolve null para desconhecido; a tela
 // mostra erro e um botão de tentar de novo. Tratar erro como ausência esconderia a pendência
 // e deixaria o beneficiário usando o app sem nunca ter aceitado nada.
@@ -48,6 +52,7 @@ export default function AceiteTermo() {
   const [dia, setDia] = useState<DiaVencimento>(10);
   const [forma, setForma] = useState<FormaPagamento>('BOLETO');
   const [enviando, setEnviando] = useState(false);
+  const [consentiu, setConsentiu] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -68,14 +73,22 @@ export default function AceiteTermo() {
   async function confirmar() {
     if (enviando) return;
     setEnviando(true);
-    const r = await aceitarTermo(dia, forma);
+    const pagaEla = (dados?.custeio ?? 'pessoa') === 'pessoa';
+    const r = await aceitarTermo({
+      dia: pagaEla ? dia : undefined,
+      forma: pagaEla ? forma : undefined,
+      consentimentoSaude: dados?.exige_consentimento_saude ? consentiu : undefined,
+    });
     setEnviando(false);
     if (!r.ok) {
       Alert.alert('Não foi possível concluir', r.mensagem);
       return;
     }
-    const msg =
-      r.cobranca === 'entidade'
+    const msg = dados?.custeio === 'empresa'
+      ? `Adesão confirmada. O seu plano é custeado por ${dados.entidade_nome ?? 'sua empresa'} — não há cobrança para você.`
+      : dados?.custeio === 'sem_custo'
+        ? 'Adesão confirmada.'
+        : r.cobranca === 'entidade'
         ? 'Adesão confirmada. A mensalidade será descontada conforme o acordo com a sua entidade.'
         : r.cobranca === 'assinatura'
           ? `Adesão confirmada. A primeira cobrança vence no dia ${dia}.`
@@ -113,16 +126,27 @@ export default function AceiteTermo() {
   }
 
   const plano = dados.plano;
+  const pagaEla = (dados.custeio ?? 'pessoa') === 'pessoa';
+  const exigeConsentimento = !!dados.exige_consentimento_saude;
+  const podeAceitar = leuAteOFim && (!exigeConsentimento || consentiu) && !enviando;
 
   return (
     <Screen titulo="Termo de adesão" scroll={false}>
       {plano ? (
         <Card>
           <Text style={s.plano}>{plano.nome}</Text>
-          <Text style={s.valor}>
-            {brl(plano.valor_mensal)}/mês
-            {plano.valor_adesao > 0 ? ` · adesão ${brl(plano.valor_adesao)}` : ''}
-          </Text>
+          {pagaEla ? (
+            <Text style={s.valor}>
+              {brl(plano.valor_mensal)}/mês
+              {plano.valor_adesao > 0 ? ` · adesão ${brl(plano.valor_adesao)}` : ''}
+            </Text>
+          ) : (
+            <Text style={s.valor}>
+              {dados.custeio === 'empresa'
+                ? `Custeado por ${dados.entidade_nome ?? 'sua empresa'} · sem cobrança para você`
+                : 'Sem cobrança'}
+            </Text>
+          )}
         </Card>
       ) : null}
 
@@ -140,6 +164,7 @@ export default function AceiteTermo() {
         <Text style={s.texto}>{dados.termo.texto}</Text>
       </ScrollView>
 
+      {pagaEla ? (<>
       <Titulo>Dia do vencimento</Titulo>
       <View style={s.linha}>
         {DIAS.map((d) => (
@@ -161,14 +186,35 @@ export default function AceiteTermo() {
           </Pressable>
         ))}
       </View>
+      </>) : null}
+
+      {exigeConsentimento ? (
+        <Pressable
+          style={[s.consentimento, consentiu && s.consentimentoAtivo]}
+          onPress={() => setConsentiu((v) => !v)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: consentiu }}
+        >
+          <View style={[s.caixa, consentiu && s.caixaMarcada]}>
+            {consentiu ? <Text style={s.caixaCheck}>✓</Text> : null}
+          </View>
+          <Text style={s.consentimentoTxt}>
+            <Text style={s.consentimentoForte}>Autorizo o uso dos meus dados de saúde </Text>
+            e dos meus dependentes para os atendimentos e benefícios do programa, conforme o item 9.8 do termo.
+            Posso revogar quando quiser.
+          </Text>
+        </Pressable>
+      ) : null}
 
       {!leuAteOFim ? (
         <Text style={s.dica}>Role o termo até o fim para poder aceitar.</Text>
+      ) : exigeConsentimento && !consentiu ? (
+        <Text style={s.dica}>Marque a autorização de dados de saúde para continuar.</Text>
       ) : null}
 
       <Pressable
-        style={[s.botao, (!leuAteOFim || enviando) && s.botaoDesativado]}
-        disabled={!leuAteOFim || enviando}
+        style={[s.botao, !podeAceitar && s.botaoDesativado]}
+        disabled={!podeAceitar}
         onPress={() => { void confirmar(); }}
       >
         <Text style={s.botaoTxt}>{enviando ? 'Confirmando…' : 'Li e aceito o termo'}</Text>
@@ -217,6 +263,32 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   botaoDesativado: { opacity: 0.4 },
+  consentimento: {
+    flexDirection: 'row',
+    gap: space.md,
+    alignItems: 'flex-start',
+    marginTop: space.lg,
+    padding: space.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.warning,
+    backgroundColor: color.warningBg,
+  },
+  consentimentoAtivo: { borderColor: color.greenDeep, backgroundColor: color.greenBg },
+  caixa: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: color.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  caixaMarcada: { backgroundColor: color.navy },
+  caixaCheck: { color: color.white, fontFamily: font.bold, fontSize: size.sm },
+  consentimentoTxt: { flex: 1, fontFamily: font.regular, fontSize: size.sm, color: color.ink, lineHeight: 19 },
+  consentimentoForte: { fontFamily: font.bold },
   botaoTxt: { fontFamily: font.bold, fontSize: size.base, color: color.white },
 });
 // ── FIM BLOCO ──

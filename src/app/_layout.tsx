@@ -44,7 +44,7 @@ function Splash() {
 }
 
 function Roteador() {
-  const { estado, aceitePendente, clube } = useSession();
+  const { estado, aceitePendente, clube, incluiClube } = useSession();
   const segments = useSegments();
   const router = useRouter();
 
@@ -109,14 +109,16 @@ function Roteador() {
     // gera o cartão Vidalink; a trava via "falta o cartão" e a jogava de volta para /clube a
     // cada mudança de tela, no meio da ativação.
     const noClube = partes[0] === 'clube' || partes[0] === 'clube-web';
-    if ((clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
+    // 28/09/2026 — plano sem clube (DIM+ Vigent, até o contrato autorizar o GrupoSin): não força a
+    // adesão. O erp também recusa criar a assinatura (403 clube_nao_incluso).
+    if (incluiClube && (clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
       router.replace('/clube' as never);
       return;
     }
 
     // pronto
     if (emAuth) router.replace('/' as never);
-  }, [estado, aceitePendente, clube, segments, router]);
+  }, [estado, aceitePendente, clube, incluiClube, segments, router]);
 
   if (estado === 'carregando') return <Splash />;
 
@@ -151,7 +153,7 @@ function Roteador() {
           arquivo dentro de (tabs)/ viraria uma quinta automaticamente. Entra pelo Perfil. */}
       <Stack.Screen
         name="dependentes"
-        options={{ headerShown: true, title: 'Dependentes', headerTintColor: color.navy }}
+        options={{ headerShown: true, title: 'Família', headerTintColor: color.navy }}
       />
     </Stack>
   );
