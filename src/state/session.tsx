@@ -51,6 +51,11 @@ type SessionValue = {
   /** false só quando o erp CONFIRMA que o plano não inclui o clube (ex.: DIM+ Vigent). */
   incluiClube: boolean;
   recarregarBeneficios: () => Promise<void>;
+  /** 28/09/2026 — admin do app (conferido no erp). */
+  souAdmin: boolean;
+  /** Plano em "ver como" (só visualização). null = o plano real. */
+  verComo: { id: string; nome: string } | null;
+  verComoPlano: (p: { id: string; nome: string } | null) => Promise<void>;
   acesso: AppAcesso;
   /** true = há termo publicado esperando aceite. null = ainda não se sabe (não bloqueia). */
   aceitePendente: boolean | null;
@@ -72,9 +77,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [elegibilidade, setElegibilidade] = useState<Elegibilidade | null>(null);
   const [clube, setClube] = useState<CartaoClube | null>(null);
   const [beneficios, setBeneficios] = useState<MeusBeneficios | null>(null);
+  const [verComo, setVerComo] = useState<{ id: string; nome: string } | null>(null);
 
   const limpar = useCallback(() => {
     setBeneficios(null);
+    setVerComo(null);
     setCliente(null);
     setModulos([]);
     setFaturas([]);
@@ -178,8 +185,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const recarregarBeneficios = useCallback(async () => {
-    const bn = await buscarBeneficios();
+    const bn = await buscarBeneficios(verComo?.id);
     if (bn) setBeneficios(bn); // falha de rede não apaga o que já estava na tela
+  }, [verComo]);
+
+  const verComoPlano = useCallback(async (p: { id: string; nome: string } | null) => {
+    setVerComo(p);
+    const bn = await buscarBeneficios(p?.id);
+    if (bn) setBeneficios(bn);
   }, []);
 
   const sair = useCallback(async () => {
@@ -204,6 +217,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Falha de leitura (null) NÃO esconde o clube: só o "não inclui" confirmado pelo erp.
     incluiClube: beneficios?.plano?.inclui_clube !== false,
     recarregarBeneficios,
+    souAdmin: !!beneficios?.admin,
+    verComo: beneficios?.simulando ? verComo : null,
+    verComoPlano,
     acesso,
     pode,
     modulo,

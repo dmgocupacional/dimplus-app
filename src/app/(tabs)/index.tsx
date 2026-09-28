@@ -67,7 +67,7 @@ const ATALHOS: Atalho[] = [
 const ESPIADA = 28;
 
 export default function Inicio() {
-  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo, beneficios, incluiClube, recarregarBeneficios } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo, beneficios, incluiClube, recarregarBeneficios, verComo, verComoPlano } = useSession();
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<string | null>(null);
   const [abrindoTele, setAbrindoTele] = useState(false);
@@ -172,7 +172,8 @@ export default function Inicio() {
         >
           <View style={{ width: larguraCartao }}>
             <CartaoDigital
-              cliente={cliente}
+              // "ver como" (admin): o cartão mostra o plano simulado.
+              cliente={verComo ? { ...cliente, plano: verComo.nome } : cliente}
               acesso={acesso}
               elegivel={elegivel}
               adimplente={adimplente}
@@ -208,6 +209,13 @@ export default function Inicio() {
               ))}
             </View>
           </View>
+        ) : null}
+
+        {verComo ? (
+          <Pressable onPress={() => void verComoPlano(null)} style={s.verComo}>
+            <Ionicons name="eye" size={16} color={color.navy} />
+            <Text style={s.verComoTxt}>Visualizando como {verComo.nome} · toque para sair</Text>
+          </Pressable>
         ) : null}
 
         {bloqueadoPorAtraso ? (
@@ -304,5 +312,17 @@ const s = StyleSheet.create({
     color: color.white,
     textAlign: 'center',
   },
+  verComo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: color.warningBg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.warning,
+    padding: space.md,
+    marginTop: space.md,
+  },
+  verComoTxt: { flex: 1, fontFamily: font.bold, fontSize: size.sm, color: color.navy },
 });
 // ── FIM BLOCO ──

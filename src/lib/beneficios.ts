@@ -37,13 +37,26 @@ export type Movimento = {
 
 export type MeusBeneficios = {
   plano: { nome: string; inclui_clube: boolean; forma_cobranca: string } | null;
+  /** 28/09/2026 — administrador do app (conferido no erp) e o plano que está sendo simulado. */
+  admin?: boolean;
+  simulando?: string | null;
   beneficios: Beneficio[];
   movimentos: Movimento[];
 };
 
-export async function buscarBeneficios(): Promise<MeusBeneficios | null> {
-  const r = await chamarFeegow<MeusBeneficios>('/api/app/beneficios');
+/** `verComoPlano`: só tem efeito para admin do app — o erp ignora para os demais. */
+export async function buscarBeneficios(verComoPlano?: string | null): Promise<MeusBeneficios | null> {
+  const qs = verComoPlano ? `?plano=${encodeURIComponent(verComoPlano)}` : '';
+  const r = await chamarFeegow<MeusBeneficios>(`/api/app/beneficios${qs}`);
   return r.ok ? r.dados : null;
+}
+
+export type PlanoAdmin = { id: string; nome: string; forma_cobranca: string; inclui_clube: boolean; ativo: boolean };
+
+/** Planos para o seletor "Ver como plano…" (só admin do app). */
+export async function listarPlanosAdmin(): Promise<PlanoAdmin[] | null> {
+  const r = await chamarFeegow<{ planos: PlanoAdmin[] }>('/api/app/admin/planos');
+  return r.ok ? r.dados.planos : null;
 }
 
 /** "Agora" no relógio de São Paulo, na mesma forma das horas da Feegow. */

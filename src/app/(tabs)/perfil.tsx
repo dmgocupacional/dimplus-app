@@ -1,9 +1,10 @@
 // ═══ BLOCO: TELA — PERFIL ═══
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Card, LinhaLista, Pill, Screen, Titulo } from '@/components/ui';
+import { listarPlanosAdmin, type PlanoAdmin } from '@/lib/beneficios';
 import { excluirMinhaConta } from '@/lib/conta';
 import { formatCPF } from '@/lib/format';
 import { rotuloEstadoPlano } from '@/lib/gate';
@@ -13,7 +14,19 @@ import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
 export default function Perfil() {
-  const { carregando, cliente, acesso, adimplente, elegivel, sair } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, sair, souAdmin, verComo, verComoPlano } = useSession();
+  // ═══ ADMIN DO APP — VER COMO PLANO (28/09/2026) ═══ só visualização; o erp confere a permissão.
+  const [seletor, setSeletor] = useState(false);
+  const [planos, setPlanos] = useState<PlanoAdmin[] | null>(null);
+  async function abrirSeletor() {
+    setSeletor(true);
+    if (!planos) setPlanos((await listarPlanosAdmin()) ?? []);
+  }
+  async function escolher(p: PlanoAdmin | null) {
+    setSeletor(false);
+    await verComoPlano(p ? { id: p.id, nome: p.nome } : null);
+  }
+  // ── FIM BLOCO ──
   const [excluindo, setExcluindo] = useState(false);
 
   // ═══ EXCLUSÃO DE CONTA — EXIGÊNCIA DE LOJA ═══
@@ -96,6 +109,50 @@ export default function Perfil() {
         </View>
       </Card>
 
+      {souAdmin ? (
+        <>
+          <Titulo>Administrador</Titulo>
+          <LinhaLista
+            icone="eye"
+            titulo="Ver como plano…"
+            subtitulo={verComo ? `Visualizando: ${verComo.nome}` : 'Veja o app como cada plano vê (só visualização)'}
+            onPress={() => void abrirSeletor()}
+          />
+        </>
+      ) : null}
+
+      <Modal visible={seletor} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSeletor(false)}>
+        <View style={s.modal}>
+          <Text style={s.modalTitulo}>Ver como plano</Text>
+          <Text style={s.modalSub}>Só visualização: agendar, cancelar e aceitar continuam valendo para o seu cadastro real.</Text>
+          {planos === null ? (
+            <ActivityIndicator color={color.navy} />
+          ) : (
+            <ScrollView>
+              <Pressable style={s.modalItem} onPress={() => void escolher(null)}>
+                <Text style={s.modalItemNome}>Meu plano real</Text>
+                {!verComo ? <Pill texto="atual" tom="ok" /> : null}
+              </Pressable>
+              {planos.map((p) => (
+                <Pressable key={p.id} style={s.modalItem} onPress={() => void escolher(p)}>
+                  <View style={s.modalItemTexto}>
+                    <Text style={s.modalItemNome}>{p.nome}</Text>
+                    <Text style={s.modalItemSub}>
+                      {p.forma_cobranca === 'faturado_empresa' ? 'faturado para a empresa' : p.forma_cobranca === 'sem_cobranca' ? 'sem cobrança' : 'individual'}
+                      {p.inclui_clube ? '' : ' · sem clube'}{p.ativo ? '' : ' · inativo para venda'}
+                    </Text>
+                  </View>
+                  {verComo?.id === p.id ? <Pill texto="vendo" tom="aviso" /> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+          <Pressable style={s.modalFechar} onPress={() => setSeletor(false)}>
+            <Text style={s.modalFecharTxt}>Fechar</Text>
+          </Pressable>
+        </View>
+      </Modal>
+
       <Titulo>Conta</Titulo>
       <LinhaLista
         icone="call"
@@ -168,5 +225,17 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginTop: space.xxl,
   },
+  modal: { flex: 1, backgroundColor: color.offwhite, padding: space.lg, gap: space.md },
+  modalTitulo: { fontFamily: font.black, fontSize: size.xl, color: color.navy },
+  modalSub: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2 },
+  modalItem: {
+    flexDirection: 'row', alignItems: 'center', gap: space.md, backgroundColor: color.white,
+    borderRadius: radius.md, borderWidth: 1, borderColor: color.border, padding: space.md, marginBottom: space.sm,
+  },
+  modalItemTexto: { flex: 1 },
+  modalItemNome: { fontFamily: font.bold, fontSize: size.base, color: color.ink, flex: 1 },
+  modalItemSub: { fontFamily: font.regular, fontSize: size.xs, color: color.ink2, marginTop: 2 },
+  modalFechar: { alignItems: 'center', padding: space.md },
+  modalFecharTxt: { fontFamily: font.bold, fontSize: size.base, color: color.navy },
 });
 // ── FIM BLOCO ──
