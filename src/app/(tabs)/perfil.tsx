@@ -106,8 +106,8 @@ export default function Perfil() {
       {/* Só leitura (S-C). A inclusão é a S-D e nasce como solicitação com aprovação. */}
       <LinhaLista
         icone="people"
-        titulo="Dependentes"
-        subtitulo="Quem está no seu plano"
+        titulo="Família"
+        subtitulo="Carteirinhas de quem está no seu plano"
         onPress={() => router.push('/dependentes' as never)}
       />
 

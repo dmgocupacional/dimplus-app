@@ -58,6 +58,8 @@ export type Cliente = {
    * tinha". Consumir sempre via `idadeEm`, que devolve `null` em vez de chutar.
    */
   data_nascimento: string | null;
+  /** 28/09/2026 — número da carteirinha DIM+ (dependente: raiz do titular + "-NN"). */
+  numero_carteirinha?: string | null;
 };
 
 /** app_features (flag global) já resolvida com o override de cliente_app_features. */

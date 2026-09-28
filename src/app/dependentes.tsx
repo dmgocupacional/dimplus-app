@@ -47,7 +47,7 @@ function rotuloIdade(nascimento: string | null): string | null {
 export default function Dependentes() {
   const [dados, setDados] = useState<MeusDependentes | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const { beneficios } = useSession();
+  const { beneficios, cliente } = useSession();
   const empresarial = beneficios?.plano?.forma_cobranca === 'faturado_empresa';
 
   const carregar = useCallback(async () => {
@@ -103,6 +103,27 @@ export default function Dependentes() {
         />
       ) : null}
 
+      {/* 28/09/2026 — a Família começa pelo titular: a tela faz sentido mesmo sem dependente. */}
+      <Titulo>Carteirinhas da família</Titulo>
+      {cliente && !cliente.dependente ? (
+        <View style={s.carteira}>
+          <View style={s.carteiraTopo}>
+            <View style={s.carteiraIcone}>
+              <Ionicons name="star" size={18} color={color.navy} />
+            </View>
+            <View style={s.carteiraTexto}>
+              <Text style={s.carteiraNome} numberOfLines={1}>{cliente.nome}</Text>
+              <Text style={s.carteiraSub}>Titular · {cliente.plano ?? 'DIM+ Saúde'}</Text>
+            </View>
+            <Pill texto="você" tom="ok" />
+          </View>
+          <View style={s.carteiraRodape}>
+            <Text style={s.carteiraRotulo}>CARTEIRINHA DIM+</Text>
+            <Text style={s.carteiraNumero}>{cliente.numero_carteirinha ?? '—'}</Text>
+          </View>
+        </View>
+      ) : null}
+
       {lista.length === 0 ? (
         // Vazio é ESTADO CORRETO — sem "erro", sem retry, sem spinner eterno.
         <Card style={s.vazio}>
@@ -114,7 +135,6 @@ export default function Dependentes() {
         </Card>
       ) : (
         <>
-          <Titulo>Carteirinhas da família</Titulo>
           {lista.map((d) => {
             const idade = rotuloIdade(d.data_nascimento);
             // sem parentesco e sem idade, some a linha em vez de mostrar "— · —"
