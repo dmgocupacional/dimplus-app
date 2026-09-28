@@ -19,6 +19,13 @@
 | Dependentes (titular ↔ dependente) | `docs/ROADMAP-DEPENDENTES.md` neste repo |
 | Ordem geral das frentes do ERP | `erp-dimplus/docs/PLANO-MESTRE.md` |
 
+## 📍 Estado do app — 25/09/2026 · v4.26.0 · SDK 57
+
+- **App Store:** 4.23.0 publicada; JS v4.26.0 pelo OTA do canal `production`. **Play Store:**
+  aguardando a chave de upload; `dimeg-upload` já no EAS.
+- Rede real, SOS com mapa, cartão Vidalink oficial e **ativado sozinho** pelo ERP.
+- Handoff: `docs/sessions/2026-09-25-rede-sos-e-cartao-automatico.md`.
+
 ## 📍 Estado do app — 23/09/2026 · v4.23.0 · SDK 57
 
 - **App Store:** 4.23.0 (build 4) aguardando revisão, lançamento automático. **Play Store:** app já
