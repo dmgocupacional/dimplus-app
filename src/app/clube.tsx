@@ -33,7 +33,6 @@ import { Aviso, Card, Screen, Titulo } from '@/components/ui';
 import { consultarCEP } from '@/lib/auth';
 import {
   abrirClube,
-  abrirFarmaciasVidalink,
   aderirClube,
   dispensarClubePorAgora,
   sincronizarClube,
@@ -379,7 +378,7 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
             </Text>
           ) : null}
           {/* Localizador oficial da Vidalink, no convênio da DIMEG — é onde estão as farmácias. */}
-          <Pressable onPress={() => void abrirFarmaciasVidalink()} style={s.botao}>
+          <Pressable onPress={() => router.push('/farmacias' as never)} style={s.botao}>
             <Text style={s.botaoTxt}>Farmácias próximas</Text>
           </Pressable>
           <BotaoClube rotulo="Abrir o clube de descontos" secundario />

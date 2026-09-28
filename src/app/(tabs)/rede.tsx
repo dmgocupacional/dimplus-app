@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card, Screen } from '@/components/ui';
-import { abrirFarmaciasVidalink, abrirRota, ligarPara } from '@/lib/clube';
+import { abrirRota, ligarPara } from '@/lib/clube';
 import { mensagemBloqueio } from '@/lib/gate';
 import type { UnidadeRede } from '@/lib/types';
 import { useSession } from '@/state/session';
@@ -109,7 +109,7 @@ export default function Rede() {
       )}
 
       <Text style={s.secao}>FARMÁCIAS</Text>
-      <Pressable onPress={() => void abrirFarmaciasVidalink()}>
+      <Pressable onPress={() => router.push('/farmacias' as never)}>
         <Card style={s.atalho}>
           <View style={[s.icone, s.iconeVerde]}>
             <Ionicons name="medkit" size={20} color={color.greenDeep} />

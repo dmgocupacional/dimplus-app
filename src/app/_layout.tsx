@@ -132,6 +132,11 @@ function Roteador() {
         name="clube-web"
         options={{ headerShown: true, title: 'Clube de descontos', headerTintColor: color.navy, headerBackTitle: 'Voltar' }}
       />
+      {/* 28/09/2026 — localizador Vidalink em WebView com o cabeçalho do DIM+. */}
+      <Stack.Screen
+        name="farmacias"
+        options={{ headerShown: true, title: 'Farmácias conveniadas', headerTintColor: color.navy, headerBackTitle: 'Voltar' }}
+      />
       <Stack.Screen name="(auth)" />
       <Stack.Screen
         name="ajuda"
