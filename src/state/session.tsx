@@ -175,13 +175,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const modulo = useCallback((key: ModuloKey) => modulos.find((m) => m.key === key), [modulos]);
 
+  // 28/09/2026 — ADMIN DO APP (Henrique, Thiago, Pedro) usa TUDO, em qualquer plano: sem trava de
+  // módulo, "em breve" ou situação do cadastro. Conferido no erp (fn_app_sou_admin); o erp
+  // continua sendo quem autoriza cada ação de verdade.
+  const souAdmin = !!beneficios?.admin;
   const pode = useCallback(
     (key: ModuloKey): Veredito => {
+      if (souAdmin) return { pode: true, motivo: null };
       const m = modulos.find((x) => x.key === key);
       if (!m) return { pode: false, motivo: 'modulo_desativado' };
       return podeAcessar(acesso, m, elegivel);
     },
-    [modulos, acesso, elegivel]
+    [modulos, acesso, elegivel, souAdmin]
   );
 
   const recarregarBeneficios = useCallback(async () => {
@@ -215,9 +220,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     clube,
     beneficios,
     // Falha de leitura (null) NÃO esconde o clube: só o "não inclui" confirmado pelo erp.
-    incluiClube: beneficios?.plano?.inclui_clube !== false,
+    // Admin sempre vê clube e telemedicina (o "ver como" não tira o que ele usa de verdade).
+    incluiClube: souAdmin || beneficios?.plano?.inclui_clube !== false,
     recarregarBeneficios,
-    souAdmin: !!beneficios?.admin,
+    souAdmin,
     verComo: beneficios?.simulando ? verComo : null,
     verComoPlano,
     acesso,

@@ -67,7 +67,7 @@ const ATALHOS: Atalho[] = [
 const ESPIADA = 28;
 
 export default function Inicio() {
-  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo, beneficios, incluiClube, recarregarBeneficios, verComo, verComoPlano } = useSession();
+  const { carregando, cliente, acesso, adimplente, elegivel, clube, pode, modulo, beneficios, incluiClube, recarregarBeneficios, verComo, verComoPlano, souAdmin } = useSession();
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<string | null>(null);
   const [abrindoTele, setAbrindoTele] = useState(false);
@@ -235,7 +235,8 @@ export default function Inicio() {
           {ATALHOS.filter((a) => incluiClube || (a.key !== 'clube' && a.key !== 'telemedicina')).map((a) => {
             const m = modulo(a.key);
             const veredito = pode(a.key);
-            const emBreve = !!m && !m.ativo;
+            // Admin abre também o que está "em breve" (é assim que se testa antes de ligar).
+            const emBreve = !souAdmin && !!m && !m.ativo;
             return (
               <Tile
                 key={a.key}
