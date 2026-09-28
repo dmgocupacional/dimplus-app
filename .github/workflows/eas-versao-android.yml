@@ -1,0 +1,37 @@
+# ═══ BLOCO: EAS — AJUSTAR O NÚMERO DE VERSÃO ANDROID (versionCode) ═══
+# 28/09/2026. O EAS controla o versionCode ("appVersionSource": "remote") e estava em 3, mas a
+# Play Store já tem o 10010 (versão 1.0.1 publicada pelo parceiro antigo). A Play recusa build
+# com versionCode menor ou igual ao publicado. Este workflow grava no EAS o número a partir do
+# qual o autoIncrement continua — é o mesmo que `eas build:version:set`, que só roda interativo.
+name: EAS - ajustar versionCode Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: versionCode a gravar no EAS (o próximo build sai com este + 1)
+        required: true
+        default: "10011"
+
+jobs:
+  ajustar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gravar o versionCode no EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CODIGO: ${{ inputs.version_code }}
+        run: |
+          APP_ID=$(node -p "require('./app.json').expo.extra.eas.projectId")
+          VERSAO=$(node -p "require('./app.json').expo.version")
+          PACOTE=$(node -p "require('./app.json').expo.android.package")
+          BODY=$(node -e '
+            const [id, v, p, c] = process.argv.slice(1);
+            console.log(JSON.stringify({
+              query: "mutation($input: AppVersionInput!) { appVersion { createAppVersion(appVersionInput: $input) { id buildVersion } } }",
+              variables: { input: { appId: id, platform: "ANDROID", applicationIdentifier: p, storeVersion: v, buildVersion: c } }
+            }));' "$APP_ID" "$VERSAO" "$PACOTE" "$CODIGO")
+          RESP=$(curl -sS https://api.expo.dev/graphql -H "Authorization: Bearer $EXPO_TOKEN" -H "Content-Type: application/json" -d "$BODY")
+          echo "$RESP"
+          echo "$RESP" | grep -q '"buildVersion":"'"$CODIGO"'"' || { echo "::error::EAS não confirmou o versionCode $CODIGO"; exit 1; }
