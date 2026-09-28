@@ -1,169 +1,621 @@
-// ═══ BLOCO: TELA — FARMÁCIAS VIDALINK EM WEBVIEW ═══
-// 28/09/2026. O localizador oficial da Vidalink (convênio CT000560) DENTRO do app, com o
-// cabeçalho do DIM+ e o cartão da pessoa no topo — em vez de jogar para o navegador.
-// Decisão do Henrique: o José confirmou (28/09) que não há API da rede de farmácias; o
-// localizador é a fonte oficial. Esta tela só o embala.
-//
-// 🔴 `react-native-webview` é carregado TARDE (require dentro do componente), só depois de
-// `temWebView` confirmar o módulo no binário. Import no topo derruba a 4.0.1 da loja.
-//
-// ⚠️ Navegação presa à Vidalink no quadro principal. Qualquer outro endereço (mapa, rota,
-// telefone) sai para o sistema — é assim que "como chegar" abre o app de mapas.
-// → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts)
+// ═══ BLOCO: TELA — FARMÁCIAS CONVENIADAS (NATIVA) ═══
+// 28/09/2026. A rede Vidalink do convênio DIMEG no padrão do DIM+: abre na cidade do cadastro,
+// busca por rede/rua/bairro, filtro por rede, e cada farmácia com "Como chegar" e "Ligar".
+// Dados: erp (/api/app/farmacias), que lê o localizador público da Vidalink — não há API.
+// Se o erp não conseguir ler, a tela oferece o localizador da Vidalink (/farmacias-vidalink).
+// → BLOCO: FARMÁCIAS VIDALINK (DADOS) (src/lib/farmacias.ts)
+// → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts) para rota e ligação.
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
-import { URL_FARMACIAS_VIDALINK, abrirFarmaciasVidalink, abrirForaDoApp, temWebView } from '@/lib/clube';
+import { abrirRota, ligarPara } from '@/lib/clube';
+import {
+  UFS,
+  buscarCidades,
+  buscarFarmacias,
+  normalizar,
+  type Farmacia,
+  type ListaFarmacias,
+} from '@/lib/farmacias';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
-const DOMINIOS_VIDALINK = ['vidalink.com.br'];
+type Estado =
+  | { fase: 'carregando' }
+  | { fase: 'pronto'; lista: ListaFarmacias }
+  | { fase: 'sem_cidade' }
+  | { fase: 'erro'; mensagem: string };
 
-function ehDaVidalink(url: string): boolean {
-  const m = /^https?:\/\/([^/?#]+)/i.exec(url);
-  if (!m) return false;
-  const host = m[1].toLowerCase();
-  return DOMINIOS_VIDALINK.some((d) => host === d || host.endsWith(`.${d}`));
+const TODAS = 'Todas';
+const MAX_CHIPS_REDE = 6;
+
+// ═══ BLOCO: REGRAS DA LISTA ═══
+/** Redes com mais unidades primeiro — são as que a pessoa procura. */
+function redesPrincipais(farmacias: Farmacia[]): string[] {
+  const contagem = new Map<string, number>();
+  for (const f of farmacias) contagem.set(f.rede, (contagem.get(f.rede) ?? 0) + 1);
+  return [...contagem.entries()]
+    .filter(([, n]) => n > 1)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_CHIPS_REDE)
+    .map(([rede]) => rede);
 }
 
-/** CPF (11 dígitos) formatado; outro número vai em blocos de 4. */
-function formatarCartao(numero: string): string {
-  const d = numero.replace(/\D/g, '');
-  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  return numero.replace(/(.{4})/g, '$1 ').trim();
+function filtrar(farmacias: Farmacia[], busca: string, rede: string, so24h: boolean): Farmacia[] {
+  const termo = normalizar(busca);
+  return farmacias.filter((f) => {
+    if (rede !== TODAS && f.rede !== rede) return false;
+    if (so24h && !f.aberta24h) return false;
+    if (!termo) return true;
+    return normalizar(`${f.rede} ${f.endereco} ${f.bairro}`).includes(termo);
+  });
 }
+
+function enderecoCompleto(f: Farmacia): string {
+  return `${f.endereco}, ${f.bairro}, ${f.cidade} - ${f.uf}, ${f.cep}`;
+}
+// ── FIM BLOCO ──
 
 export default function Farmacias() {
   const { clube } = useSession();
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(false);
-  // Troca a chave para recarregar do zero no "Tentar de novo".
-  const [tentativa, setTentativa] = useState(0);
+  const [estado, setEstado] = useState<Estado>({ fase: 'carregando' });
+  const [local, setLocal] = useState<{ uf: string; cidade: string } | undefined>(undefined);
+  const [busca, setBusca] = useState('');
+  const [rede, setRede] = useState(TODAS);
+  const [so24h, setSo24h] = useState(false);
+  const [escolhendo, setEscolhendo] = useState(false);
 
-  useEffect(() => {
-    // Binário sem WebView: abre no navegador embutido e volta — comportamento de antes.
-    if (!temWebView) void abrirFarmaciasVidalink().finally(() => sair());
+  const carregar = useCallback(async (alvo?: { uf: string; cidade: string }) => {
+    setEstado({ fase: 'carregando' });
+    const r = await buscarFarmacias(alvo);
+    if (r.ok) {
+      setEstado({ fase: 'pronto', lista: r.dados });
+      setLocal({ uf: r.dados.uf, cidade: r.dados.cidade });
+    } else if (r.precisaCidade) {
+      setEstado({ fase: 'sem_cidade' });
+      setEscolhendo(true);
+    } else {
+      setEstado({ fase: 'erro', mensagem: r.mensagem });
+    }
   }, []);
 
-  if (!temWebView) {
-    return (
-      <View style={s.centro}>
-        <ActivityIndicator color={color.navy} />
-        <Text style={s.aviso}>Abrindo as farmácias conveniadas…</Text>
-      </View>
-    );
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  const lista = estado.fase === 'pronto' ? estado.lista : null;
+  const chipsRede = useMemo(() => (lista ? redesPrincipais(lista.farmacias) : []), [lista]);
+  const tem24h = !!lista?.farmacias.some((f) => f.aberta24h);
+  const visiveis = useMemo(
+    () => (lista ? filtrar(lista.farmacias, busca, rede, so24h) : []),
+    [lista, busca, rede, so24h],
+  );
+
+  function escolherCidade(uf: string, cidade: string) {
+    setEscolhendo(false);
+    setBusca('');
+    setRede(TODAS);
+    setSo24h(false);
+    void carregar({ uf, cidade });
   }
 
-  // require tardio de propósito — ver o cabeçalho do bloco.
-  const { WebView } = require('react-native-webview') as typeof import('react-native-webview');
+  const cabecalho = (
+    <View>
+      {clube?.cartao_vidalink ? <FaixaCartao numero={clube.cartao_vidalink} /> : null}
+
+      <View style={s.localLinha}>
+        <Ionicons name="location" size={18} color={color.greenDeep} />
+        <Text style={s.localTxt} numberOfLines={1}>
+          {local ? `${local.cidade} · ${local.uf}` : 'Escolha a cidade'}
+        </Text>
+        <Pressable onPress={() => setEscolhendo(true)} style={s.trocar} hitSlop={8}>
+          <Text style={s.trocarTxt}>Trocar cidade</Text>
+        </Pressable>
+      </View>
+
+      {lista ? (
+        <>
+          <View style={s.busca}>
+            <Ionicons name="search" size={18} color={color.ink3} />
+            <TextInput
+              value={busca}
+              onChangeText={setBusca}
+              placeholder="Buscar por rede, rua ou bairro"
+              placeholderTextColor={color.ink3}
+              style={s.buscaInput}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {busca ? (
+              <Pressable onPress={() => setBusca('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={color.ink3} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {chipsRede.length > 0 || tem24h ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+              {tem24h ? <Chip rotulo="Aberta 24h" ativo={so24h} onPress={() => setSo24h((v) => !v)} /> : null}
+              {[TODAS, ...chipsRede].map((r) => (
+                <Chip key={r} rotulo={r} ativo={rede === r} onPress={() => setRede(r)} />
+              ))}
+            </ScrollView>
+          ) : null}
+
+          <Text style={s.contagem}>
+            {visiveis.length === 1 ? '1 farmácia conveniada' : `${visiveis.length} farmácias conveniadas`}
+            {lista.desatualizado ? ' · lista pode estar desatualizada' : ''}
+          </Text>
+        </>
+      ) : null}
+    </View>
+  );
 
   return (
     <View style={s.tela}>
-      {clube?.cartao_vidalink ? (
-        <Pressable onPress={() => router.push('/clube' as never)} style={s.faixaCartao}>
-          <View style={s.faixaTexto}>
-            <Text style={s.faixaRotulo}>SEU CARTÃO FARMÁCIA VIDALINK</Text>
-            <Text style={s.faixaNumero}>{formatarCartao(clube.cartao_vidalink)}</Text>
-          </View>
-          <Text style={s.faixaLink}>Ver cartão</Text>
-        </Pressable>
-      ) : null}
-
-      {erro ? (
-        <View style={s.centro}>
-          <Text style={s.tituloErro}>Não conseguimos abrir o localizador agora</Text>
-          <Text style={s.aviso}>O site da Vidalink não respondeu.</Text>
-          <Pressable
-            onPress={() => {
-              setErro(false);
-              setTentativa((t) => t + 1);
-            }}
-            style={s.botao}
-          >
-            <Text style={s.botaoTxt}>Tentar de novo</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={s.web}>
-          <WebView
-            key={tentativa}
-            source={{ uri: URL_FARMACIAS_VIDALINK }}
-            style={s.web}
-            onLoadStart={() => setCarregando(true)}
-            onLoadEnd={() => setCarregando(false)}
-            onError={() => setErro(true)}
-            onShouldStartLoadWithRequest={(req) => {
-              // Quadros embutidos (mapa do localizador) sempre carregam — lição do clube-web.
-              if (req.isTopFrame === false) return true;
-              if (req.url === 'about:blank' || ehDaVidalink(req.url)) return true;
-              abrirForaDoApp(req.url);
-              return false;
-            }}
-            // O localizador usa sessão ASP.NET em cookie/URL e pode pedir a localização.
-            sharedCookiesEnabled
-            thirdPartyCookiesEnabled
-            geolocationEnabled
-            javaScriptEnabled
-            domStorageEnabled
-            setSupportMultipleWindows={false}
-            allowsBackForwardNavigationGestures
+      {estado.fase === 'carregando' ? (
+        <ScrollView contentContainerStyle={s.conteudo}>
+          {cabecalho}
+          <Esqueleto />
+        </ScrollView>
+      ) : estado.fase === 'erro' ? (
+        <ScrollView contentContainerStyle={s.conteudo}>
+          {cabecalho}
+          <Vazio
+            icone="cloud-offline-outline"
+            titulo="Não conseguimos carregar as farmácias agora"
+            texto="Tente de novo em instantes ou consulte direto no localizador da Vidalink."
+            acao={{ rotulo: 'Tentar de novo', onPress: () => void carregar(local) }}
+            planoB
           />
-          {carregando ? (
-            <View style={s.carregando} pointerEvents="none">
-              <ActivityIndicator color={color.navy} />
-            </View>
-          ) : null}
-        </View>
+        </ScrollView>
+      ) : estado.fase === 'sem_cidade' ? (
+        <ScrollView contentContainerStyle={s.conteudo}>
+          {cabecalho}
+          <Vazio
+            icone="location-outline"
+            titulo="Em qual cidade você quer procurar?"
+            texto="Escolha a cidade para ver as farmácias conveniadas."
+            acao={{ rotulo: 'Escolher cidade', onPress: () => setEscolhendo(true) }}
+          />
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={visiveis}
+          keyExtractor={(f, i) => `${f.rede}-${f.endereco}-${i}`}
+          renderItem={({ item }) => <CartaoFarmacia f={item} />}
+          ListHeaderComponent={cabecalho}
+          contentContainerStyle={s.conteudo}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          ListEmptyComponent={
+            estado.lista.farmacias.length === 0 ? (
+              <Vazio
+                icone="medkit-outline"
+                titulo={`Ainda não há farmácia conveniada em ${estado.lista.cidade}`}
+                texto="Tente uma cidade vizinha."
+                acao={{ rotulo: 'Trocar cidade', onPress: () => setEscolhendo(true) }}
+              />
+            ) : (
+              <Vazio
+                icone="search-outline"
+                titulo="Nenhuma farmácia com esse filtro"
+                texto="Limpe a busca ou escolha outra rede."
+                acao={{
+                  rotulo: 'Limpar filtros',
+                  onPress: () => {
+                    setBusca('');
+                    setRede(TODAS);
+                    setSo24h(false);
+                  },
+                }}
+              />
+            )
+          }
+          ListFooterComponent={
+            estado.lista.farmacias.length > 0 ? (
+              <Pressable onPress={() => router.push('/farmacias-vidalink' as never)} style={s.rodape}>
+                <Text style={s.rodapeTxt}>Dados da rede Vidalink · ver no site da Vidalink</Text>
+              </Pressable>
+            ) : null
+          }
+        />
       )}
+
+      <SeletorCidade
+        visivel={escolhendo}
+        ufInicial={local?.uf ?? 'SP'}
+        onFechar={() => setEscolhendo(false)}
+        onEscolher={escolherCidade}
+      />
     </View>
   );
 }
 
-function sair() {
-  if (router.canGoBack()) router.back();
-  else router.replace('/' as never);
+// ═══ BLOCO: COMPONENTES DA TELA ═══
+function FaixaCartao({ numero }: { numero: string }) {
+  const d = numero.replace(/\D/g, '');
+  const formatado = d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : numero;
+  return (
+    <Pressable onPress={() => router.push('/clube' as never)} style={s.cartao}>
+      <View style={s.cartaoIcone}>
+        <Ionicons name="card" size={20} color={color.navy} />
+      </View>
+      <View style={s.cartaoTexto}>
+        <Text style={s.cartaoRotulo}>SEU CARTÃO FARMÁCIA</Text>
+        <Text style={s.cartaoNumero}>{formatado}</Text>
+        <Text style={s.cartaoDica}>Informe o CPF no balcão da farmácia</Text>
+      </View>
+      <View style={s.cartaoBotao}>
+        <Text style={s.cartaoBotaoTxt}>Ver cartão</Text>
+      </View>
+    </Pressable>
+  );
 }
 
+function Chip({ rotulo, ativo, onPress }: { rotulo: string; ativo: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[s.chip, ativo ? s.chipAtivo : null]}>
+      <Text style={[s.chipTxt, ativo ? s.chipTxtAtivo : null]}>{rotulo}</Text>
+    </Pressable>
+  );
+}
+
+function CartaoFarmacia({ f }: { f: Farmacia }) {
+  const tel = f.telefone?.replace(/\D/g, '') ?? '';
+  return (
+    <View style={s.farmacia}>
+      <View style={s.farmaciaTopo}>
+        <View style={s.farmaciaIcone}>
+          <Ionicons name="medkit" size={18} color={color.greenDeep} />
+        </View>
+        <View style={s.farmaciaTexto}>
+          <Text style={s.farmaciaRede} numberOfLines={2}>
+            {f.rede}
+          </Text>
+          <Text style={s.farmaciaEndereco}>{f.endereco}</Text>
+          <Text style={s.farmaciaBairro}>
+            {f.bairro} · {f.cep}
+          </Text>
+          {f.referencia ? <Text style={s.farmaciaBairro}>{f.referencia}</Text> : null}
+        </View>
+        {f.aberta24h ? (
+          <View style={s.selo}>
+            <Text style={s.seloTxt}>24h</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={s.acoes}>
+        <Pressable onPress={() => abrirRota(enderecoCompleto(f))} style={[s.acao, s.acaoPrimaria]}>
+          <Ionicons name="navigate" size={16} color={color.navy} />
+          <Text style={s.acaoPrimariaTxt}>Como chegar</Text>
+        </Pressable>
+        {tel.length >= 10 ? (
+          <Pressable onPress={() => ligarPara(tel)} style={[s.acao, s.acaoSecundaria]}>
+            <Ionicons name="call" size={16} color={color.navy} />
+            <Text style={s.acaoSecundariaTxt}>Ligar</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function Esqueleto() {
+  return (
+    <View>
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={[s.farmacia, s.esqueleto]}>
+          <View style={s.esqLinhaGrande} />
+          <View style={s.esqLinha} />
+          <View style={s.esqLinhaCurta} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Vazio({
+  icone,
+  titulo,
+  texto,
+  acao,
+  planoB,
+}: {
+  icone: keyof typeof Ionicons.glyphMap;
+  titulo: string;
+  texto: string;
+  acao: { rotulo: string; onPress: () => void };
+  planoB?: boolean;
+}) {
+  return (
+    <View style={s.vazio}>
+      <View style={s.vazioIcone}>
+        <Ionicons name={icone} size={28} color={color.navy} />
+      </View>
+      <Text style={s.vazioTitulo}>{titulo}</Text>
+      <Text style={s.vazioTexto}>{texto}</Text>
+      <Pressable onPress={acao.onPress} style={s.vazioBotao}>
+        <Text style={s.vazioBotaoTxt}>{acao.rotulo}</Text>
+      </Pressable>
+      {planoB ? (
+        <Pressable onPress={() => router.push('/farmacias-vidalink' as never)} hitSlop={8}>
+          <Text style={s.vazioLink}>Abrir o localizador da Vidalink</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function SeletorCidade({
+  visivel,
+  ufInicial,
+  onFechar,
+  onEscolher,
+}: {
+  visivel: boolean;
+  ufInicial: string;
+  onFechar: () => void;
+  onEscolher: (uf: string, cidade: string) => void;
+}) {
+  const [uf, setUf] = useState(ufInicial);
+  const [cidades, setCidades] = useState<string[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState('');
+
+  useEffect(() => {
+    if (visivel) setUf(ufInicial);
+  }, [visivel, ufInicial]);
+
+  useEffect(() => {
+    if (!visivel) return;
+    let vivo = true;
+    setCidades(null);
+    setErro(null);
+    setFiltro('');
+    void buscarCidades(uf).then((r) => {
+      if (!vivo) return;
+      if (r.ok) setCidades(r.cidades);
+      else setErro(r.mensagem);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [visivel, uf]);
+
+  const lista = useMemo(() => {
+    const t = normalizar(filtro);
+    return (cidades ?? []).filter((c) => !t || normalizar(c).includes(t));
+  }, [cidades, filtro]);
+
+  return (
+    <Modal visible={visivel} animationType="slide" presentationStyle="pageSheet" onRequestClose={onFechar}>
+      <View style={s.modal}>
+        <View style={s.modalTopo}>
+          <Text style={s.modalTitulo}>Escolha a cidade</Text>
+          <Pressable onPress={onFechar} hitSlop={10}>
+            <Ionicons name="close" size={24} color={color.navy} />
+          </Pressable>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} style={s.ufs}>
+          {UFS.map((u) => (
+            <Chip key={u} rotulo={u} ativo={uf === u} onPress={() => setUf(u)} />
+          ))}
+        </ScrollView>
+
+        <View style={[s.busca, s.modalBusca]}>
+          <Ionicons name="search" size={18} color={color.ink3} />
+          <TextInput
+            value={filtro}
+            onChangeText={setFiltro}
+            placeholder="Digite o nome da cidade"
+            placeholderTextColor={color.ink3}
+            style={s.buscaInput}
+            autoCorrect={false}
+          />
+        </View>
+
+        {erro ? (
+          <Text style={s.modalAviso}>{erro}</Text>
+        ) : cidades === null ? (
+          <ActivityIndicator color={color.navy} style={s.modalCarregando} />
+        ) : (
+          <FlatList
+            data={lista}
+            keyExtractor={(c) => c}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <Pressable onPress={() => onEscolher(uf, item)} style={s.cidade}>
+                <Text style={s.cidadeTxt}>{item}</Text>
+                <Ionicons name="chevron-forward" size={16} color={color.ink3} />
+              </Pressable>
+            )}
+            ListEmptyComponent={<Text style={s.modalAviso}>Nenhuma cidade com farmácia conveniada.</Text>}
+          />
+        )}
+      </View>
+    </Modal>
+  );
+}
+// ── FIM BLOCO ──
+
 const s = StyleSheet.create({
-  tela: { flex: 1, backgroundColor: color.white },
-  web: { flex: 1 },
-  faixaCartao: {
+  tela: { flex: 1, backgroundColor: color.offwhite },
+  conteudo: { padding: space.lg, paddingBottom: space.xxl },
+
+  cartao: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: color.navy,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    gap: space.sm,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    gap: space.md,
+    marginBottom: space.lg,
   },
-  faixaTexto: { flex: 1 },
-  faixaRotulo: { fontFamily: font.bold, fontSize: size.sm, color: color.green },
-  faixaNumero: { fontFamily: font.black, fontSize: size.base, color: color.white },
-  faixaLink: { fontFamily: font.bold, fontSize: size.sm, color: color.white },
-  carregando: {
-    position: 'absolute',
-    top: space.lg,
-    alignSelf: 'center',
-    backgroundColor: color.white,
+  cartaoIcone: {
+    width: 40,
+    height: 40,
     borderRadius: radius.pill,
-    padding: space.sm,
-  },
-  centro: {
-    flex: 1,
+    backgroundColor: color.green,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: space.xl,
-    backgroundColor: color.offwhite,
   },
-  tituloErro: { fontFamily: font.black, fontSize: size.lg, color: color.navy, textAlign: 'center' },
-  aviso: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, textAlign: 'center', marginTop: space.md },
-  botao: {
-    marginTop: space.xl,
+  cartaoTexto: { flex: 1 },
+  cartaoRotulo: { fontFamily: font.bold, fontSize: size.xs, color: color.green, letterSpacing: 0.6 },
+  cartaoNumero: { fontFamily: font.black, fontSize: size.lg, color: color.white, marginTop: 2 },
+  cartaoDica: { fontFamily: font.regular, fontSize: size.xs, color: color.sky, marginTop: 2 },
+  cartaoBotao: {
+    borderWidth: 1,
+    borderColor: color.green,
+    borderRadius: radius.pill,
+    paddingVertical: space.xs + 2,
+    paddingHorizontal: space.md,
+  },
+  cartaoBotaoTxt: { fontFamily: font.bold, fontSize: size.xs, color: color.green },
+
+  localLinha: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginBottom: space.md },
+  localTxt: { flex: 1, fontFamily: font.black, fontSize: size.lg, color: color.navy },
+  trocar: { backgroundColor: color.greenBg, borderRadius: radius.pill, paddingVertical: space.xs, paddingHorizontal: space.md },
+  trocarTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.greenDeep },
+
+  busca: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: color.white,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    paddingHorizontal: space.md,
+    height: 46,
+  },
+  buscaInput: { flex: 1, fontFamily: font.regular, fontSize: size.base, color: color.ink },
+
+  chips: { gap: space.sm, paddingVertical: space.md },
+  chip: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.white,
+    paddingVertical: space.xs + 2,
+    paddingHorizontal: space.md,
+  },
+  chipAtivo: { backgroundColor: color.navy, borderColor: color.navy },
+  chipTxt: { fontFamily: font.medium, fontSize: size.sm, color: color.ink2 },
+  chipTxtAtivo: { color: color.white },
+
+  contagem: { fontFamily: font.medium, fontSize: size.sm, color: color.ink2, marginBottom: space.md },
+
+  farmacia: {
+    backgroundColor: color.white,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.md,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  farmaciaTopo: { flexDirection: 'row', gap: space.md },
+  farmaciaIcone: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: color.greenBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  farmaciaTexto: { flex: 1 },
+  farmaciaRede: { fontFamily: font.black, fontSize: size.base, color: color.navy },
+  farmaciaEndereco: { fontFamily: font.regular, fontSize: size.sm, color: color.ink, marginTop: 2 },
+  farmaciaBairro: { fontFamily: font.regular, fontSize: size.xs, color: color.ink2, marginTop: 2 },
+  selo: {
+    alignSelf: 'flex-start',
+    backgroundColor: color.navy,
+    borderRadius: radius.pill,
+    paddingVertical: 2,
+    paddingHorizontal: space.sm,
+  },
+  seloTxt: { fontFamily: font.black, fontSize: size.xs, color: color.green },
+
+  acoes: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  acao: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    borderRadius: radius.pill,
+    paddingVertical: space.sm + 2,
+  },
+  acaoPrimaria: { backgroundColor: color.green },
+  acaoPrimariaTxt: { fontFamily: font.black, fontSize: size.sm, color: color.navy },
+  acaoSecundaria: { borderWidth: 1, borderColor: color.navy },
+  acaoSecundariaTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
+
+  esqueleto: { gap: space.sm },
+  esqLinhaGrande: { height: 16, width: '55%', borderRadius: radius.sm, backgroundColor: color.border },
+  esqLinha: { height: 12, width: '85%', borderRadius: radius.sm, backgroundColor: color.offwhite },
+  esqLinhaCurta: { height: 12, width: '40%', borderRadius: radius.sm, backgroundColor: color.offwhite },
+
+  vazio: { alignItems: 'center', paddingVertical: space.xxl, paddingHorizontal: space.lg },
+  vazioIcone: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: color.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.md,
+  },
+  vazioTitulo: { fontFamily: font.black, fontSize: size.lg, color: color.navy, textAlign: 'center' },
+  vazioTexto: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, textAlign: 'center', marginTop: space.sm },
+  vazioBotao: {
+    marginTop: space.lg,
     backgroundColor: color.green,
     borderRadius: radius.pill,
     paddingVertical: space.md,
     paddingHorizontal: space.xl,
   },
-  botaoTxt: { fontFamily: font.black, fontSize: size.base, color: color.navy },
+  vazioBotaoTxt: { fontFamily: font.black, fontSize: size.base, color: color.navy },
+  vazioLink: { fontFamily: font.bold, fontSize: size.sm, color: color.navy600, marginTop: space.lg, textDecorationLine: 'underline' },
+
+  rodape: { paddingVertical: space.lg, alignItems: 'center' },
+  rodapeTxt: { fontFamily: font.regular, fontSize: size.xs, color: color.ink3 },
+
+  modal: { flex: 1, backgroundColor: color.offwhite, paddingTop: space.lg },
+  modalTopo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: space.lg,
+  },
+  modalTitulo: { fontFamily: font.black, fontSize: size.xl, color: color.navy },
+  ufs: { flexGrow: 0, paddingHorizontal: space.lg },
+  modalBusca: { marginHorizontal: space.lg, marginBottom: space.sm },
+  modalCarregando: { marginTop: space.xxl },
+  modalAviso: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, textAlign: 'center', marginTop: space.xl },
+  cidade: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
+    backgroundColor: color.white,
+  },
+  cidadeTxt: { fontFamily: font.medium, fontSize: size.base, color: color.ink },
 });
 // ── FIM BLOCO ──
