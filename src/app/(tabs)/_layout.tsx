@@ -44,6 +44,14 @@ export default function TabsLayout() {
           tabBarIcon: ({ color: c, size }) => <Ionicons name="receipt" size={size} color={c} />,
         }}
       />
+      {/* 28/09/2026 — Família em todos os planos: titular + carteirinhas dos dependentes. */}
+      <Tabs.Screen
+        name="familia"
+        options={{
+          title: 'Família',
+          tabBarIcon: ({ color: c, size }) => <Ionicons name="people" size={size} color={c} />,
+        }}
+      />
       <Tabs.Screen
         name="perfil"
         options={{

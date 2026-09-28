@@ -165,7 +165,7 @@ export default function Perfil() {
         icone="people"
         titulo="Família"
         subtitulo="Carteirinhas de quem está no seu plano"
-        onPress={() => router.push('/dependentes' as never)}
+        onPress={() => router.push('/familia' as never)}
       />
 
       <Titulo>Suporte</Titulo>
