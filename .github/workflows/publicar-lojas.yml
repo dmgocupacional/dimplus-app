@@ -28,6 +28,10 @@ on:
         type: choice
         options: [tudo, so-textos]
         default: tudo
+      ficha_android:
+        description: "Android: atualizar também a ficha pública da Play Store (textos e capturas). Deixe DESLIGADO no teste interno — a ficha é vista por todos os usuários."
+        type: boolean
+        default: false
       enviar_revisao:
         description: iOS — enviar para revisão da Apple ao final
         type: boolean
@@ -149,7 +153,8 @@ jobs:
       - run: gem install fastlane --no-document
         if: steps.google.outputs.pronto == 'true'
       - name: Textos e capturas da ficha (fastlane)
-        if: steps.google.outputs.pronto == 'true'
+        # 28/09/2026 — a ficha é PÚBLICA: no teste interno ela não sobe (ficha_android = false).
+        if: steps.google.outputs.pronto == 'true' && (inputs.ficha_android || inputs.etapa == 'so-textos')
         env:
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
         run: fastlane android publicar

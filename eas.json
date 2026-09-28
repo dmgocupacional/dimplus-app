@@ -34,7 +34,7 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-sa.json",
-        "track": "production",
+        "track": "internal",
         "releaseStatus": "completed"
       }
     }
