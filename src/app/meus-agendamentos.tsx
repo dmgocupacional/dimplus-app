@@ -181,7 +181,7 @@ export default function MeusAgendamentos() {
     const r = await cancelarAgendamento(a.id);
     setCancelando(null);
     if (!r.ok) {
-      Alert.alert('Não foi possível cancelar', mensagemErro(r.tipo, r.mensagem));
+      Alert.alert(r.tipo === 'demonstracao' ? 'Modo demonstração' : 'Não foi possível cancelar', mensagemErro(r.tipo, r.mensagem));
       return;
     }
     void carregar();
@@ -237,7 +237,7 @@ export default function MeusAgendamentos() {
     setRemarcacao({ fase: 'confirmando', agendamento, slot });
     const r = await reagendarAgendamento(agendamento.id, slot.data, slot.horario);
     if (!r.ok) {
-      Alert.alert('Não foi possível remarcar', mensagemErro(r.tipo, r.mensagem));
+      Alert.alert(r.tipo === 'demonstracao' ? 'Modo demonstração' : 'Não foi possível remarcar', mensagemErro(r.tipo, r.mensagem));
       // 🔴 Devolve a lista INTACTA. Zerar aqui fazia a tela dizer "nenhum outro horário
       //    livre" quando o que falhou foi a REMARCAÇÃO, não a busca (mesmo defeito
       //    corrigido em `agendar.tsx`, 20/08/2026). Segue sem refazer a busca.

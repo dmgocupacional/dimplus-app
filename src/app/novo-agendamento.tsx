@@ -258,7 +258,7 @@ export default function Agendar() {
       horario: slot.horario,
     });
     if (!r.ok) {
-      Alert.alert('Não foi possível agendar', mensagemErro(r.tipo, r.mensagem));
+      Alert.alert(r.tipo === 'demonstracao' ? 'Modo demonstração' : 'Não foi possível agendar', mensagemErro(r.tipo, r.mensagem));
       // Conflito: a agenda em mãos está PROVADAMENTE velha — recarrega. Nos demais
       // erros ela continua válida e não pagamos a rede de novo.
       if (r.tipo === 'conflito') {
