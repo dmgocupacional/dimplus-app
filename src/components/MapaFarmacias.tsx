@@ -8,11 +8,13 @@
 // ⚠️ A atribuição "© OpenStreetMap" é exigência da licença e fica visível no canto.
 // ⚠️ baseUrl identificado: a política de uso dos mapas do OSM pede Referer.
 // → BLOCO: MAPA DO SOS (src/app/sos.tsx)
+import { createElement, useEffect } from 'react';
 import { Platform, StyleSheet, TurboModuleRegistry, View } from 'react-native';
 
 import { color, radius } from '@/theme/tokens';
 
-export const temMapa = Platform.OS !== 'web' && TurboModuleRegistry?.get?.('RNCWebViewModule') != null;
+// Na WEB o mapa vai num <iframe> do próprio navegador (29/09/2026: o app web e o robô do tutorial).
+export const temMapa = Platform.OS === 'web' || TurboModuleRegistry?.get?.('RNCWebViewModule') != null;
 
 export type PinFarmacia = { i: number; lat: number; lon: number; nome: string; aproximado: boolean };
 
@@ -40,7 +42,8 @@ D.pins.forEach(function(p){
   var sel=D.sel===p.i;
   var ic=L.divIcon({className:'',html:'<div class="pin'+(p.aproximado?' aprox':'')+(sel?' sel':'')+'"><i></i></div>',iconSize:sel?[32,32]:[26,26],iconAnchor:sel?[16,32]:[13,26]});
   L.marker([p.lat,p.lon],{icon:ic,zIndexOffset:sel?1000:0}).addTo(m).on('click',function(){
-    window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(String(p.i));
+    if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(String(p.i));}
+    else if(window.parent&&window.parent!==window){window.parent.postMessage('farmacia:'+p.i,'*');}
   });
   pts.push([p.lat,p.lon]);
 });
@@ -68,7 +71,29 @@ export function MapaFarmacias({
   selecionado: number | null;
   onSelecionar: (i: number) => void;
 }) {
+  // Web: o toque no pin chega por postMessage do <iframe>.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const ouvir = (e: MessageEvent) => {
+      const m = typeof e.data === 'string' ? /^farmacia:(\d+)$/.exec(e.data) : null;
+      if (m) onSelecionar(Number(m[1]));
+    };
+    window.addEventListener('message', ouvir);
+    return () => window.removeEventListener('message', ouvir);
+  }, [onSelecionar]);
+
   if (!temMapa) return null;
+  if (Platform.OS === 'web') {
+    return (
+      <View style={s.mapa}>
+        {createElement('iframe', {
+          srcDoc: htmlMapa(pins, eu, selecionado),
+          title: 'Mapa das farmácias conveniadas',
+          style: { border: 0, width: '100%', height: '100%' },
+        })}
+      </View>
+    );
+  }
   // require tardio de propósito — ver temMapa.
   const { WebView } = require('react-native-webview') as typeof import('react-native-webview');
   return (
