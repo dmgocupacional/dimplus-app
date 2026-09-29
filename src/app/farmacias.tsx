@@ -6,6 +6,8 @@
 // Se o erp não conseguir ler, a tela oferece o localizador da Vidalink (/farmacias-vidalink).
 // → BLOCO: FARMÁCIAS VIDALINK (DADOS) (src/lib/farmacias.ts)
 // → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts) para rota e ligação.
+// 28/09/2026 — aba MAPA: pins das farmácias e o ponto azul da pessoa dentro do app.
+// → BLOCO: MAPA — FARMÁCIAS CONVENIADAS (src/components/MapaFarmacias.tsx)
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -22,6 +24,7 @@ import {
   View,
 } from 'react-native';
 
+import { MapaFarmacias, temMapa, type PinFarmacia } from '@/components/MapaFarmacias';
 import { abrirRota, ligarPara } from '@/lib/clube';
 import {
   UFS,
@@ -99,6 +102,8 @@ export default function Farmacias() {
   const [so24h, setSo24h] = useState(false);
   const [escolhendo, setEscolhendo] = useState(false);
   const [pos, setPos] = useState<Posicao | null>(null);
+  const [modo, setModo] = useState<'lista' | 'mapa'>('lista');
+  const [selecionada, setSelecionada] = useState<number | null>(null);
   const [semPermissao, setSemPermissao] = useState(false);
   const [pertoDeVoce, setPertoDeVoce] = useState(false);
   const repeticoes = useRef(0);
@@ -152,6 +157,13 @@ export default function Farmacias() {
   const tem24h = !!lista?.farmacias.some((f) => f.aberta24h);
   const ordenadas = useMemo(() => (lista ? ordenar(lista.farmacias, pos) : []), [lista, pos]);
   const visiveis = useMemo(() => filtrar(ordenadas, busca, rede, so24h), [ordenadas, busca, rede, so24h]);
+  // Pins: só quem já tem coordenada; o índice é a posição em `visiveis` (o card usa o mesmo).
+  const pins = useMemo<PinFarmacia[]>(
+    () => visiveis.flatMap((f, i) => (f.lat != null && f.lon != null
+      ? [{ i, lat: f.lat, lon: f.lon, nome: f.rede, aproximado: f.precisao === 'bairro' }] : [])),
+    [visiveis],
+  );
+  const semPin = visiveis.length - pins.length;
   const calculandoDistancia = !!pos && pendentes > 0;
 
   function escolherCidade(uf: string, cidade: string) {
@@ -218,6 +230,17 @@ export default function Farmacias() {
             </ScrollView>
           ) : null}
 
+          {temMapa && lista.farmacias.length > 0 ? (
+            <View style={s.modos}>
+              {(['lista', 'mapa'] as const).map((m) => (
+                <Pressable key={m} onPress={() => { setModo(m); setSelecionada(null); }} style={[s.modo, modo === m && s.modoAtivo]}>
+                  <Ionicons name={m === 'lista' ? 'list' : 'map'} size={16} color={modo === m ? color.white : color.navy} />
+                  <Text style={[s.modoTxt, modo === m && s.modoTxtAtivo]}>{m === 'lista' ? 'Lista' : 'Mapa'}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           <Text style={s.contagem}>
             {visiveis.length === 1 ? '1 farmácia conveniada' : `${visiveis.length} farmácias conveniadas`}
             {pos && !calculandoDistancia && lista.farmacias.length > 0 ? ' · mais perto primeiro' : ''}
@@ -256,6 +279,21 @@ export default function Farmacias() {
             texto="Escolha a cidade para ver as farmácias conveniadas."
             acao={{ rotulo: 'Escolher cidade', onPress: () => setEscolhendo(true) }}
           />
+        </ScrollView>
+      ) : modo === 'mapa' ? (
+        <ScrollView contentContainerStyle={s.conteudo} keyboardShouldPersistTaps="handled">
+          {cabecalho}
+          <MapaFarmacias pins={pins} eu={pos} selecionado={selecionada} onSelecionar={setSelecionada} />
+          {semPin > 0 ? (
+            <Text style={s.mapaNota}>
+              {semPin === 1 ? '1 farmácia ainda sem localização no mapa' : `${semPin} farmácias ainda sem localização no mapa`} — estão na Lista.
+            </Text>
+          ) : null}
+          {selecionada != null && visiveis[selecionada] ? (
+            <CartaoFarmacia f={visiveis[selecionada]!} />
+          ) : (
+            <Text style={s.mapaNota}>Toque num pin para ver a farmácia.</Text>
+          )}
         </ScrollView>
       ) : (
         <FlatList
@@ -603,6 +641,12 @@ const s = StyleSheet.create({
   chipTxtAtivo: { color: color.white },
 
   contagem: { fontFamily: font.medium, fontSize: size.sm, color: color.ink2, marginBottom: space.md },
+  modos: { flexDirection: 'row', backgroundColor: color.white, borderRadius: radius.pill, borderWidth: 1, borderColor: color.border, padding: 3, marginBottom: space.md, alignSelf: 'flex-start' },
+  modo: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingVertical: space.xs + 2, paddingHorizontal: space.lg, borderRadius: radius.pill },
+  modoAtivo: { backgroundColor: color.navy },
+  modoTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
+  modoTxtAtivo: { color: color.white },
+  mapaNota: { fontFamily: font.regular, fontSize: size.xs, color: color.ink2, textAlign: 'center', marginBottom: space.md },
 
   farmacia: {
     backgroundColor: color.white,
