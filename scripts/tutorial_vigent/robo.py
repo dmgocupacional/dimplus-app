@@ -90,7 +90,8 @@ class Robo:
             await campos[1].click(); await self.pg.keyboard.type(SENHA, delay=60); await self.espera(500)
         else:
             await campos[0].fill(CPF); await campos[1].fill(SENHA)
-        await self.toca('Entrar', botao=True, espera=9000)
+        await self.toca('Entrar', botao=True, espera=300)
+        await self.aguarda('Olá,', maximo=40000)  # a espera do login também sai do vídeo
 
     async def rola(self, dy: int, vezes: int = 1, x: int = W // 2, y: int = H // 2, pausa: int = 450):
         await self.pg.mouse.move(x, y)
