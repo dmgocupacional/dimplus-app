@@ -19,14 +19,19 @@ import {
 } from '@expo-google-fonts/nunito';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErroBoundary } from '@/components/ErroBoundary';
+import { entrarDemonstracao } from '@/lib/auth';
 import { clubeDispensado } from '@/lib/clube';
+import { empresaDemo, instalarAlertaWeb, ouvirSite } from '@/lib/demonstracao';
 import { SessionProvider, useSession } from '@/state/session';
-import { color } from '@/theme/tokens';
+import { color, font, size } from '@/theme/tokens';
+
+// Na web o Alert do React Native não aparecia (confirmar agendamento, avisos, erros).
+instalarAlertaWeb();
 
 function Splash() {
   return (
@@ -47,6 +52,13 @@ function Roteador() {
   const { estado, aceitePendente, clube, incluiClube } = useSession();
   const segments = useSegments();
   const router = useRouter();
+
+  // ═══ MODO DEMONSTRAÇÃO (web, ?demo=<empresa>) → BLOCO em src/lib/demonstracao.ts ═══
+  const [demo] = useState(() => empresaDemo());
+  useEffect(() => {
+    if (demo && estado === 'deslogado') void entrarDemonstracao(demo);
+  }, [demo, estado]);
+  useEffect(() => (demo ? ouvirSite((rota) => router.push(rota as never)) : undefined), [demo, router]);
 
   useEffect(() => {
     if (estado === 'carregando') return;
@@ -177,6 +189,13 @@ export default function RootLayout() {
         {/* DENTRO dos providers de propósito: o boundary usa tokens de tema e a versão do
             app para montar a tela de erro. Fora daqui, um crash na própria tela de erro
             voltaria ao preto — que é justamente o que este bloco existe para eliminar. */}
+        {empresaDemo() ? (
+          <View style={sDemo.faixa}>
+            <Text style={sDemo.texto}>
+              Modo demonstração · nada é marcado de verdade
+            </Text>
+          </View>
+        ) : null}
         <ErroBoundary local="raiz">
           <Roteador />
         </ErroBoundary>
@@ -185,3 +204,8 @@ export default function RootLayout() {
   );
 }
 // ── FIM BLOCO ──
+
+const sDemo = StyleSheet.create({
+  faixa: { backgroundColor: color.navy, paddingVertical: 5, paddingHorizontal: 12 },
+  texto: { color: color.white, fontFamily: font.bold, fontSize: size.xs, textAlign: 'center' },
+});

@@ -198,6 +198,24 @@ export async function entrar(cpf: string, senha: string): Promise<Resultado> {
   }
 }
 
+/** 29/09/2026 — MODO DEMONSTRAÇÃO (web): entra na conta de demonstração da empresa, sem senha.
+ *  O ERP só devolve a conta marcada como demonstração daquela empresa e recusa qualquer escrita dela. */
+export async function entrarDemonstracao(empresa: string): Promise<Resultado> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/public/app-demo-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empresa }),
+    });
+    const json = (await resp.json()) as { access_token?: string; refresh_token?: string; error?: string };
+    if (!resp.ok || !json.access_token || !json.refresh_token) return { ok: false, erro: json.error ?? 'Demonstração indisponível.' };
+    const { error } = await supabase.auth.setSession({ access_token: json.access_token, refresh_token: json.refresh_token });
+    return error ? { ok: false, erro: 'Não foi possível abrir a demonstração.' } : { ok: true };
+  } catch {
+    return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
+  }
+}
+
 export async function sair(): Promise<void> {
   await supabase.auth.signOut();
 }

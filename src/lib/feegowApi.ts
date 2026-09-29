@@ -39,7 +39,9 @@ export type FeegowErroTipo =
   | 'conflito'
   | 'indisponivel'
   | 'erro_servidor'
-  | 'rede';
+  | 'rede'
+  /** 29/09/2026 — conta de demonstração: o ERP recusou uma escrita. `mensagem` vem pronta. */
+  | 'demonstracao';
 
 export type FeegowResultado<T> =
   | { ok: true; dados: T }
@@ -112,8 +114,11 @@ export async function chamarFeegow<T>(path: string, opcoes: Opcoes = {}): Promis
     let mensagem = 'Não foi possível completar a operação.';
     let corpo: unknown;
     try {
-      const json = (await resp.json()) as { error?: string };
+      const json = (await resp.json()) as { error?: string; mensagem?: string };
       corpo = json;
+      if (json.error === 'demonstracao') {
+        return { ok: false, tipo: 'demonstracao', mensagem: json.mensagem ?? 'Esta é uma demonstração: aqui nada é marcado nem enviado.', status: resp.status, corpo };
+      }
       if (json.error) mensagem = json.error;
     } catch {
       // Corpo não é JSON (ex.: página de erro HTML) — mantém a mensagem padrão.
