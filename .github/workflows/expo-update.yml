@@ -56,11 +56,17 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_SKIP_AUTO_FINGERPRINT: '1'
+          # 29/09/2026 — a mensagem vai no LINK que o dev build abre (updateMessage=...). O commit
+          # inteiro, com "+" e "|", quebrou a abertura no iPhone ("Error loading app"). Vai só a
+          # 1ª linha, sem símbolos que confundem URL, e no máximo 120 caracteres.
+          COMMIT_MSG: ${{ github.event.head_commit.message || 'manual' }}
         run: |
+          MSG=$(printf '%s' "$COMMIT_MSG" | head -n1 | tr -d '+|%&#?"<>\\`' | cut -c1-120)
+          echo "Mensagem do update: $MSG"
           eas update \
             --branch preview \
             --environment preview \
-            --message "${{ github.event.head_commit.message || 'manual' }}" \
+            --message "$MSG" \
             --non-interactive
 
       # ═══ ALERTA DE FALHA ═══
