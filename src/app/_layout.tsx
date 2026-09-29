@@ -17,10 +17,11 @@ import {
   Nunito_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/nunito';
+import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErroBoundary } from '@/components/ErroBoundary';
@@ -178,6 +179,24 @@ function Roteador() {
   );
 }
 
+// ═══ FAIXA DO MODO DEMONSTRAÇÃO (web) ═══
+// 29/09/2026 — dentro do site não há gesto nem botão "voltar" do aparelho: a seta da faixa volta
+// para a tela anterior (ou para o Início, se já estiver na primeira).
+function FaixaDemo() {
+  const router = useRouter();
+  const voltar = () => (router.canGoBack() ? router.back() : router.replace('/' as never));
+  return (
+    <View style={sDemo.faixa}>
+      <Pressable onPress={voltar} hitSlop={10} accessibilityRole="button" accessibilityLabel="Voltar para a tela anterior" style={sDemo.voltar}>
+        <Ionicons name="chevron-back" size={18} color={color.white} />
+        <Text style={sDemo.voltarTxt}>Voltar</Text>
+      </Pressable>
+      <Text style={sDemo.texto} numberOfLines={1}>Modo demonstração · nada é marcado</Text>
+    </View>
+  );
+}
+// ── FIM BLOCO ──
+
 export default function RootLayout() {
   const [fontesProntas] = useFonts({
     Nunito_300Light,
@@ -196,13 +215,7 @@ export default function RootLayout() {
         {/* DENTRO dos providers de propósito: o boundary usa tokens de tema e a versão do
             app para montar a tela de erro. Fora daqui, um crash na própria tela de erro
             voltaria ao preto — que é justamente o que este bloco existe para eliminar. */}
-        {empresaDemo() ? (
-          <View style={sDemo.faixa}>
-            <Text style={sDemo.texto}>
-              Modo demonstração · nada é marcado de verdade
-            </Text>
-          </View>
-        ) : null}
+        {empresaDemo() ? <FaixaDemo /> : null}
         <ErroBoundary local="raiz">
           <Roteador />
         </ErroBoundary>
@@ -213,6 +226,8 @@ export default function RootLayout() {
 // ── FIM BLOCO ──
 
 const sDemo = StyleSheet.create({
-  faixa: { backgroundColor: color.navy, paddingVertical: 5, paddingHorizontal: 12 },
-  texto: { color: color.white, fontFamily: font.bold, fontSize: size.xs, textAlign: 'center' },
+  faixa: { backgroundColor: color.navy, paddingVertical: 6, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  voltar: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 2, paddingRight: 8, borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.25)' },
+  voltarTxt: { color: color.white, fontFamily: font.bold, fontSize: size.sm },
+  texto: { flex: 1, color: color.white, fontFamily: font.bold, fontSize: size.xs, textAlign: 'right' },
 });
