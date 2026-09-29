@@ -42,7 +42,7 @@ class Robo:
         self.tmp = SAIDA / 'tmp' / self.cap
         shutil.rmtree(self.tmp, ignore_errors=True); self.tmp.mkdir(parents=True)
         self.ctx = await self.b.new_context(viewport={'width': W, 'height': H}, device_scale_factor=3,
-            ignore_https_errors=True, record_video_dir=str(self.tmp), record_video_size={'width': 1080, 'height': 1920},
+            ignore_https_errors=True, record_video_dir=str(self.tmp), record_video_size={'width': W, 'height': H},  # grava no tamanho da tela; amplia no ffmpeg
             locale='pt-BR', timezone_id='America/Sao_Paulo')
         await self.ctx.add_init_script(DEDO)
         self.pg = await self.ctx.new_page()
@@ -56,13 +56,13 @@ class Robo:
         if video:
             bruto = await video.path()
             destino = SAIDA / 'videos' / f'dimplus-vigent-{self.cap}.mp4'
-            filtro = 'fps=30'
+            filtro = 'scale=720:1280:flags=lanczos,fps=30'
             if self.cortes:
                 # remove os trechos de espera e refaz a linha do tempo
                 cond = '+'.join(f'between(t,{a:.2f},{b:.2f})' for a, b in self.cortes)
-                filtro = f"select='not({cond})',setpts=N/FRAME_RATE/TB,fps=30"
+                filtro = f"select='not({cond})',setpts=N/FRAME_RATE/TB,scale=720:1280:flags=lanczos,fps=30"
             subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(bruto), '-vf', filtro,
-                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '26', '-preset', 'medium',
+                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '22', '-preset', 'medium',
                             '-movflags', '+faststart', '-an', str(destino)], check=True)
 
     async def espera(self, ms: int): await self.pg.wait_for_timeout(ms)
