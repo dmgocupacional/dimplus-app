@@ -26,7 +26,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErroBoundary } from '@/components/ErroBoundary';
 import { entrarDemonstracao } from '@/lib/auth';
 import { clubeDispensado } from '@/lib/clube';
-import { empresaDemo, instalarAlertaWeb, ouvirSite } from '@/lib/demonstracao';
+import { empresaDemo, instalarAlertaWeb, ouvirSite, ROTAS_ABA } from '@/lib/demonstracao';
 import { SessionProvider, useSession } from '@/state/session';
 import { color, font, size } from '@/theme/tokens';
 
@@ -58,7 +58,13 @@ function Roteador() {
   useEffect(() => {
     if (demo && estado === 'deslogado') void entrarDemonstracao(demo);
   }, [demo, estado]);
-  useEffect(() => (demo ? ouvirSite((rota) => router.push(rota as never)) : undefined), [demo, router]);
+  useEffect(() => (demo ? ouvirSite((rota) => {
+    // Cada capítulo do site pede uma tela: fecha o que estiver empilhado e abre só ela — senão,
+    // rolando o site, formava-se uma pilha escondida de telas e o Voltar do app passava por todas.
+    if (router.canDismiss()) router.dismissAll();
+    if (ROTAS_ABA.has(rota)) router.replace(rota as never);
+    else router.push(rota as never);
+  }) : undefined), [demo, router]);
 
   useEffect(() => {
     if (estado === 'carregando') return;

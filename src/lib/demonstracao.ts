@@ -12,6 +12,8 @@ const SLUG = /^[a-z0-9-]{2,40}$/;
 /** Sites que podem comandar a navegação do app em demonstração. */
 const ORIGEM_SITE = /^https:\/\/bemvindo\.[a-z0-9-]+\.dimeg\.com\.br$|^http:\/\/localhost(:\d+)?$/;
 /** Rotas que o site pode abrir (nada além disto). */
+/** Rotas que são ABAS (trocar de aba, sem empilhar). */
+export const ROTAS_ABA = new Set(['/', '/rede', '/familia', '/perfil']);
 export const ROTAS_DEMO = new Set(['/', '/rede', '/familia', '/perfil', '/agendar', '/farmacias', '/clube', '/ajuda', '/meus-agendamentos']);
 
 /** Empresa da demonstração, ou null fora dela. Guarda na sessão do navegador: a URL perde o
