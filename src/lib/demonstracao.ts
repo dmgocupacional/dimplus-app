@@ -39,6 +39,8 @@ export function ouvirSite(ir: (rota: string) => void): () => void {
     if (d?.tipo === 'dimplus:ir' && typeof d.rota === 'string' && ROTAS_DEMO.has(d.rota)) ir(d.rota);
   };
   window.addEventListener('message', ouvir);
+  // Avisa o site que já dá para pedir telas (ele manda o pedido uma vez só, sem repetir no escuro).
+  try { window.parent?.postMessage({ tipo: 'dimplus:pronto' }, '*'); } catch { /* fora de iframe */ }
   return () => window.removeEventListener('message', ouvir);
 }
 

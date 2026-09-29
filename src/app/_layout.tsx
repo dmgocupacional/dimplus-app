@@ -18,9 +18,9 @@ import {
   useFonts,
 } from '@expo-google-fonts/nunito';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -59,7 +59,13 @@ function Roteador() {
   useEffect(() => {
     if (demo && estado === 'deslogado') void entrarDemonstracao(demo);
   }, [demo, estado]);
+  const caminho = usePathname();
+  const caminhoRef = useRef(caminho);
+  caminhoRef.current = caminho;
   useEffect(() => (demo ? ouvirSite((rota) => {
+    // Já está nessa tela: não reabre (abrir de novo deixava uma cópia invisível por cima,
+    // bloqueando os toques).
+    if (caminhoRef.current === rota) return;
     // Cada capítulo do site pede uma tela: fecha o que estiver empilhado e abre só ela — senão,
     // rolando o site, formava-se uma pilha escondida de telas e o Voltar do app passava por todas.
     if (router.canDismiss()) router.dismissAll();
