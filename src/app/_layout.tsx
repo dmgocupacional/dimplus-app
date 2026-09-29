@@ -123,14 +123,15 @@ function Roteador() {
     const noClube = partes[0] === 'clube' || partes[0] === 'clube-web';
     // 28/09/2026 — plano sem clube (DIM+ Vigent, até o contrato autorizar o GrupoSin): não força a
     // adesão. O erp também recusa criar a assinatura (403 clube_nao_incluso).
-    if (incluiClube && (clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
+    // Demonstração: a adesão ao clube é uma escrita (recusada no ERP) — a trava prenderia a pessoa.
+    if (!demo && incluiClube && (clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
       router.replace('/clube' as never);
       return;
     }
 
     // pronto
     if (emAuth) router.replace('/' as never);
-  }, [estado, aceitePendente, clube, incluiClube, segments, router]);
+  }, [estado, aceitePendente, clube, incluiClube, segments, router, demo]);
 
   if (estado === 'carregando') return <Splash />;
 
