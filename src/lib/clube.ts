@@ -198,6 +198,8 @@ export interface DadosAdesao {
   data_nascimento?: string;
   naturalidade?: string;
   email?: string;
+  /** 29/09/2026 — celular com DDD: o Gestor exige para criar o usuário do clube. */
+  telefone?: string;
   endereco_cep?: string;
   endereco_logradouro?: string;
   endereco_numero?: string;

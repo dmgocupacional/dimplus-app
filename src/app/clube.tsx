@@ -70,6 +70,8 @@ const CAMPOS: {
   max?: number;
 }[] = [
   { chave: 'email', dado: 'email', rotulo: 'E-MAIL', teclado: 'email-address', max: 120 },
+  // 29/09/2026 — o Gestor exige celular (DDD + 9 dígitos); sem ele o usuário do clube não nasce.
+  { chave: 'telefone', dado: 'telefone', rotulo: 'CELULAR COM DDD', teclado: 'number-pad', max: 15 },
   { chave: 'naturalidade', dado: 'naturalidade', rotulo: 'NATURALIDADE (CIDADE ONDE NASCEU)', max: 60 },
   { chave: 'cep', dado: 'endereco_cep', rotulo: 'CEP', teclado: 'number-pad', max: 9 },
   { chave: 'endereco', dado: 'endereco_logradouro', rotulo: 'RUA', max: 120 },
