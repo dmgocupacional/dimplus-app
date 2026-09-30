@@ -32,6 +32,10 @@ on:
         description: "Android: atualizar também a ficha pública da Play Store (textos e capturas). Deixe DESLIGADO no teste interno — a ficha é vista por todos os usuários."
         type: boolean
         default: false
+      version_code:
+        description: "Android: versionCode do release em produção para a ficha (ex. 10013). Vazio = o build desta rodada"
+        type: string
+        default: ""
       enviar_revisao:
         description: iOS — enviar para revisão da Apple ao final
         type: boolean
@@ -157,4 +161,5 @@ jobs:
         if: steps.google.outputs.pronto == 'true' && (inputs.ficha_android || inputs.etapa == 'so-textos')
         env:
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+          VERSION_CODE: ${{ inputs.version_code }}
         run: fastlane android publicar

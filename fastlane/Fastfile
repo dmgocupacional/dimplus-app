@@ -89,6 +89,8 @@ platform :android do
       skip_upload_aab: true,
       skip_upload_changelogs: true, # as notas vão junto com o build, pelo EAS
       track: "production",
+      # a trilha pode ter mais de um release: sem o número o supply recusa a ficha
+      version_code: ENV["VERSION_CODE"].to_s.empty? ? nil : Integer(ENV["VERSION_CODE"]),
     )
   end
   desc "Promove o último build do teste interno para a produção (o .aab já está na Play)"
