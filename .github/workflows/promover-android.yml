@@ -6,6 +6,10 @@ name: Play - promover interno para produção
 
 on:
   workflow_dispatch:
+    inputs:
+      version_code:
+        description: versionCode do build no teste interno a promover (ex. 10013)
+        required: true
 
 concurrency:
   group: promover-android
@@ -23,5 +27,6 @@ jobs:
       - name: Promover
         env:
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+          VERSION_CODE: ${{ inputs.version_code }}
         run: fastlane android promover
 # ── FIM BLOCO ──

@@ -97,6 +97,7 @@ platform :android do
       package_name: "com.javenessi.dimmsaude",
       json_key_data: ENV.fetch("GOOGLE_SA_JSON"),
       track: "internal",
+      version_code: Integer(ENV.fetch("VERSION_CODE")), # a trilha pode ter mais de um release
       track_promote_to: "production",
       track_promote_release_status: "completed",
       skip_upload_apk: true,
