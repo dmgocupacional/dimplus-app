@@ -1,0 +1,27 @@
+# ═══ BLOCO: PLAY — PROMOVER TESTE INTERNO → PRODUÇÃO ═══
+# 30/09/2026. O eas.json envia o .aab sempre para a trilha `internal`. Este disparo MANUAL leva o
+# último build do teste interno para a produção (lançamento completo). Rodar só depois de o build
+# do "Publicar nas lojas" terminar e aparecer no teste interno.
+name: Play - promover interno para produção
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: promover-android
+  cancel-in-progress: false
+
+jobs:
+  promover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - run: gem install fastlane --no-document
+      - name: Promover
+        env:
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+        run: fastlane android promover
+# ── FIM BLOCO ──

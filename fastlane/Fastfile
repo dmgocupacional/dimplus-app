@@ -91,5 +91,21 @@ platform :android do
       track: "production",
     )
   end
+  desc "Promove o último build do teste interno para a produção (o .aab já está na Play)"
+  lane :promover do
+    supply(
+      package_name: "com.javenessi.dimmsaude",
+      json_key_data: ENV.fetch("GOOGLE_SA_JSON"),
+      track: "internal",
+      track_promote_to: "production",
+      track_promote_release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
 end
 # ── FIM BLOCO ──
