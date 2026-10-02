@@ -23,10 +23,13 @@
 ## Play Store
 - App: `com.javenessi.dimmsaude` (o PACOTE é para sempre esse; a redefinição de 23/09 trocou só a
   CHAVE DE UPLOAD), conta de organização "Dimeg". Verificação de desenvolvedor Android: já registrado.
-- Fluxo: `publicar-lojas.yml` manda o `.aab` para o **teste interno** → `promover-android.yml`
-  (disparo manual, input `version_code`) leva para **produção** → 🔴 **a publicação gerenciada está
-  ligada**: alguém precisa clicar **Publicar** no Play Console (Visão geral da publicação). Sem o
-  clique a versão fica parada — foi o que segurou a 4.34.5 de 30/09 a 02/10/2026.
+- Fluxo (02/10/2026): `publicar-lojas.yml` faz build → teste interno → **promove sozinho para
+  produção** (input `promover_producao`, ligado por padrão). A **publicação gerenciada foi desligada**
+  no Play Console em 02/10/2026: o que o workflow manda vai direto para a revisão do Google. Se alguém
+  religar, toda versão volta a esperar o clique em Publicar. `promover-android.yml` segue como reserva.
+- iOS: se o fastlane falhar ao enviar para revisão (Apple ainda processando o build), o workflow
+  tenta de novo pela API por até 30 min. Reserva manual: workflow "Apple - diagnóstico de envio"
+  com `enviar=sim`.
 - Manual: **Testar e lançar → Produção → Criar nova versão** → `.aab` → notas → revisar → lançar.
 - versionCode do build tem de ser maior que o publicado.
 - Capturas: **proporção até 2:1** — o formato do iPhone 6,9" é recusado; usar 1080×1920.

@@ -10,6 +10,8 @@ name: Publicar nas lojas
 # O EAS incrementa o número do build sozinho (autoIncrement no eas.json).
 #
 # Lançamento AUTOMÁTICO depois da aprovação, nas duas lojas (decisão do Henrique, 23/09/2026).
+# 02/10/2026: Android promove sozinho para produção (publicação gerenciada desligada na Play) e o
+# iOS tenta de novo o envio para revisão pela API se a Apple ainda estiver processando o build.
 # 🔴 Android só roda com o segredo GOOGLE_SA_JSON cadastrado — sem ele o job pula e avisa.
 #
 # Segredos usados: EXPO_TOKEN, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, DEMO_CPF, DEMO_SENHA,
@@ -32,6 +34,10 @@ on:
         description: "Android: atualizar também a ficha pública da Play Store (textos e capturas). Deixe DESLIGADO no teste interno — a ficha é vista por todos os usuários."
         type: boolean
         default: false
+      promover_producao:
+        description: "Android: depois do teste interno, promover direto para produção (lançamento completo)"
+        type: boolean
+        default: true
       version_code:
         description: "Android: versionCode do release em produção para a ficha (ex. 10013). Vazio = o build desta rodada"
         type: string
@@ -107,6 +113,19 @@ jobs:
           # Só-textos nunca envia para revisão: sem build novo, não há o que revisar.
           ENVIAR: ${{ inputs.etapa == 'tudo' && inputs.enviar_revisao }}
         run: fastlane ios publicar enviar_revisao:$ENVIAR
+      - name: Revisão Apple — nova tentativa pela API se o fastlane falhou
+        # 02/10/2026 — a Apple recusa ("not in valid state") enquanto ainda processa o build.
+        if: failure() && inputs.enviar_revisao
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ENVIAR: sim
+        run: |
+          pip install pyjwt cryptography requests
+          VERSAO=$(node -p "require('./app.json').expo.version"); export VERSAO
+          for i in 1 2 3 4 5 6; do sleep 300; python scripts/diagnostico_apple.py | tee saida.txt; grep -q '"WAITING_FOR_REVIEW"' saida.txt && exit 0; done
+          exit 1
 
   android:
     name: Android
@@ -145,6 +164,14 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: npx eas-cli@latest build --platform android --profile production --non-interactive --wait --auto-submit
+      - name: versionCode do build desta rodada
+        id: vc
+        if: steps.google.outputs.pronto == 'true' && inputs.etapa == 'tudo'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          VC=$(npx eas-cli@latest build:list --platform android --buildProfile production --status finished --limit 1 --json --non-interactive | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].appBuildVersion))")
+          echo "versionCode: $VC"; echo "codigo=$VC" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         if: steps.google.outputs.pronto == 'true'
         with:
@@ -161,5 +188,18 @@ jobs:
         if: steps.google.outputs.pronto == 'true' && (inputs.ficha_android || inputs.etapa == 'so-textos')
         env:
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
-          VERSION_CODE: ${{ inputs.version_code }}
+          VERSION_CODE: ${{ inputs.version_code || steps.vc.outputs.codigo }}
         run: fastlane android publicar
+      - name: Promover teste interno → produção (fastlane)
+        # 02/10/2026 — o envio do EAS cai no teste interno; aqui ele vai direto para produção.
+        # O envio do .aab termina depois do build: tenta por até ~20 min até o release aparecer.
+        if: steps.google.outputs.pronto == 'true' && inputs.etapa == 'tudo' && inputs.promover_producao
+        env:
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+          VERSION_CODE: ${{ steps.vc.outputs.codigo }}
+        run: |
+          for i in $(seq 1 20); do
+            fastlane android promover && exit 0
+            echo "release $VERSION_CODE ainda não está no teste interno — nova tentativa em 60s ($i/20)"; sleep 60
+          done
+          exit 1
