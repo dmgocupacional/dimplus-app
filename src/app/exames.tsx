@@ -12,7 +12,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+// 02/10/2026 — sem import de expo-web-browser no topo: derrubaria binários antigos via OTA.
+import { abrirUrl } from '@/lib/clube';
 
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
 import { formatData } from '@/lib/format';
@@ -88,7 +89,7 @@ export default function Exames() {
     const url = await linkDoLaudo(id);
     setOcupadoLab(null);
     if (!url) { Alert.alert('Resultado', 'Não foi possível abrir o laudo agora. Tente de novo em instantes.'); return; }
-    await WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url).catch(() => undefined));
+    await abrirUrl(url).catch(() => Linking.openURL(url).catch(() => undefined));
   }
 
   async function emailLaudoLab(id: string) {

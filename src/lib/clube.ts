@@ -53,7 +53,7 @@ export const temWebView =
   Platform.OS !== 'web' && TurboModuleRegistry?.get?.('RNCWebViewModule') != null;
 
 /** Abre qualquer URL no navegador embutido, ou no do sistema se o binário não tiver o módulo. */
-async function abrirUrl(url: string): Promise<void> {
+export async function abrirUrl(url: string): Promise<void> {
   if (!temNavegadorEmbutido) {
     await Linking.openURL(url);
     return;
