@@ -1,10 +1,11 @@
 # ═══ BLOCO: APPLE — DIAGNÓSTICO DE ENVIO ═══
-# 02/10/2026. Pergunta à Apple o que impede a versão de ir para revisão. Não envia nada.
+# 02/10/2026. Pergunta à Apple o que impede a versão de ir para revisão. Com enviar=sim, envia para revisão.
 name: Apple - diagnóstico de envio
 on:
   workflow_dispatch:
     inputs:
       versao: { description: versão (ex. 4.34.6), required: true, default: "4.34.6" }
+      enviar: { description: "sim = enviar para revisão se estiver válido", required: false, default: "nao" }
 jobs:
   diagnostico:
     runs-on: ubuntu-latest
@@ -16,5 +17,6 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           VERSAO: ${{ inputs.versao }}
+          ENVIAR: ${{ inputs.enviar }}
         run: python scripts/diagnostico_apple.py
 # ── FIM BLOCO ──

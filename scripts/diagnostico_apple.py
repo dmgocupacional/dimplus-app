@@ -23,3 +23,7 @@ r = requests.post(B + "/reviewSubmissionItems", headers=H, json={"data": {"type"
     "relationships": {"reviewSubmission": {"data": {"type": "reviewSubmissions", "id": sub}},
                       "appStoreVersion": {"data": {"type": "appStoreVersions", "id": ver}}}}})
 print("ITEM", r.status_code); print(json.dumps(r.json(), indent=1, ensure_ascii=False)[:6000])
+if os.environ.get("ENVIAR") == "sim" and sub:
+    r = requests.patch(f"{B}/reviewSubmissions/{sub}", headers=H, json={"data": {"type": "reviewSubmissions",
+        "id": sub, "attributes": {"submitted": True}}})
+    print("ENVIADO", r.status_code, json.dumps(r.json(), ensure_ascii=False)[:3000])
