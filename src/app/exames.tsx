@@ -11,11 +11,14 @@
 // pessoa nunca deveria ver "erro ao carregar" genérico aqui.
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
 import { formatData } from '@/lib/format';
 import { getLaudos, getPedidosExame, getUrlLaudo } from '@/lib/exames';
+import { buscarExamesLab, laudoPorEmail, linkDoLaudo, type PedidoLab } from '@/lib/examesLab';
+import { TrilhaExame } from '@/components/TrilhaExame';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
 import type { Laudo, PedidoExame } from '@/lib/types';
 import { color, font, radius, size, space } from '@/theme/tokens';
@@ -52,10 +55,15 @@ function dataOuTraco(iso: string | null): string {
 export default function Exames() {
   const [carga, setCarga] = useState<Carga>({ estado: 'carregando' });
   const [abrindoLaudo, setAbrindoLaudo] = useState<number | null>(null);
+  // Resultados do laboratório (DB): carga INDEPENDENTE da Feegow — se a Feegow falhar (ex.:
+  // paciente sem cadastro lá), os resultados do laboratório continuam aparecendo.
+  const [lab, setLab] = useState<PedidoLab[] | null>(null);
+  const [ocupadoLab, setOcupadoLab] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarga({ estado: 'carregando' });
-    const [rPedidos, rLaudos] = await Promise.all([getPedidosExame(), getLaudos()]);
+    const [rPedidos, rLaudos, rLab] = await Promise.all([getPedidosExame(), getLaudos(), buscarExamesLab()]);
+    setLab(rLab ?? []);
 
     // Os dois batem no mesmo paciente — se um falhar por sessão/cadastro, o outro falha
     // pela mesma razão. Mostrar o primeiro erro encontrado é suficiente; não é preciso
@@ -74,6 +82,61 @@ export default function Exames() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  async function verLaudoLab(id: string) {
+    setOcupadoLab(id);
+    const url = await linkDoLaudo(id);
+    setOcupadoLab(null);
+    if (!url) { Alert.alert('Resultado', 'Não foi possível abrir o laudo agora. Tente de novo em instantes.'); return; }
+    await WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url).catch(() => undefined));
+  }
+
+  async function emailLaudoLab(id: string) {
+    setOcupadoLab(id);
+    const r = await laudoPorEmail(id);
+    setOcupadoLab(null);
+    Alert.alert('Resultado', r.ok ? `Enviamos o laudo para ${r.para}.` : r.mensagem);
+  }
+
+  // Seção "Resultados do laboratório": só aparece quando há resultado do DB para a família.
+  const secaoLab = lab && lab.length > 0 ? (
+    <>
+      <Titulo>Resultados do laboratório</Titulo>
+      {lab.map((p) => (
+        <Card key={p.id} style={s.labCard}>
+          <View style={s.labTopo}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.linhaTitulo}>{p.dependente && p.paciente ? p.paciente : 'Seus exames'}</Text>
+              <Text style={s.linhaSub}>Coleta em {dataOuTraco(p.coletado_em)}</Text>
+            </View>
+            {p.laudo_disponivel ? (
+              <View style={s.selo}><Text style={s.seloTexto}>Laudo pronto</Text></View>
+            ) : null}
+          </View>
+          {p.exames.map((e, i) => (
+            <View key={`${p.id}-${i}`} style={s.labExame}>
+              <Text style={s.labExameNome}>{e.nome}</Text>
+              <TrilhaExame etapas={e.etapas} />
+            </View>
+          ))}
+          {p.laudo_disponivel ? (
+            <View style={s.labAcoes}>
+              <Pressable style={[s.botao, s.botaoPrimario]} disabled={ocupadoLab === p.id} onPress={() => verLaudoLab(p.id)}
+                accessibilityRole="button" accessibilityLabel="Ver laudo">
+                {ocupadoLab === p.id ? <ActivityIndicator size="small" color={color.navy} /> : (
+                  <><Ionicons name="document-text" size={16} color={color.navy} /><Text style={s.botaoTexto}>Ver laudo</Text></>
+                )}
+              </Pressable>
+              <Pressable style={s.botao} disabled={ocupadoLab === p.id} onPress={() => emailLaudoLab(p.id)}
+                accessibilityRole="button" accessibilityLabel="Mandar para meu e-mail">
+                <Ionicons name="mail-outline" size={16} color={color.navy} /><Text style={s.botaoTexto}>Mandar para meu e-mail</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </Card>
+      ))}
+    </>
+  ) : null;
 
   async function abrirLaudo(labReportId: number) {
     setAbrindoLaudo(labReportId);
@@ -98,7 +161,8 @@ export default function Exames() {
 
   if (carga.estado === 'erro') {
     return (
-      <Screen titulo="Exames" scroll={false}>
+      <Screen titulo="Exames">
+        {secaoLab}
         <Aviso tom="info" icone="information-circle" texto={mensagemErro(carga.tipo, carga.mensagem)} />
       </Screen>
     );
@@ -108,6 +172,7 @@ export default function Exames() {
 
   return (
     <Screen titulo="Exames">
+      {secaoLab}
       <Titulo>Laudos prontos</Titulo>
       {laudos.length === 0 ? (
         <Card style={s.vazio}>
@@ -164,6 +229,17 @@ export default function Exames() {
 }
 
 const s = StyleSheet.create({
+  labCard: { marginBottom: space.md, gap: space.sm },
+  labTopo: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  selo: { backgroundColor: color.greenBg, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 4 },
+  seloTexto: { fontFamily: font.bold, fontSize: size.xs, color: color.navy },
+  labExame: { borderTopWidth: 1, borderTopColor: color.border, paddingTop: space.md },
+  labExameNome: { fontFamily: font.bold, fontSize: size.sm, color: color.ink },
+  labAcoes: { flexDirection: 'row', gap: space.sm, marginTop: space.sm, flexWrap: 'wrap' },
+  botao: { flexDirection: 'row', alignItems: 'center', gap: space.xs, borderRadius: radius.pill, borderWidth: 1,
+    borderColor: color.border, paddingHorizontal: space.lg, paddingVertical: space.sm, minHeight: 40 },
+  botaoPrimario: { backgroundColor: color.green, borderColor: color.green },
+  botaoTexto: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
   vazio: { alignItems: 'center', paddingVertical: space.xl, gap: space.sm },
   vazioTexto: {
     fontFamily: font.regular,
