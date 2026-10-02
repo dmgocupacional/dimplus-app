@@ -170,7 +170,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          VC=$(npx eas-cli@latest build:list --platform android --buildProfile production --status finished --limit 1 --json --non-interactive | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].appBuildVersion))")
+          VC=$(npx eas-cli@latest build:list --platform android --build-profile production --status finished --limit 1 --json --non-interactive | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].appBuildVersion))")
           echo "versionCode: $VC"; echo "codigo=$VC" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         if: steps.google.outputs.pronto == 'true'
