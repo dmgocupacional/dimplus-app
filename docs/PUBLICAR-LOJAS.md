@@ -42,6 +42,10 @@
   02/10/2026 depois de o identificador ter sido apagado no Expo). Para recadastrar:
   `eas credentials -p android` → production → Keystore → Set up a new keystore → Generate? **NÃO**
   → caminho do `.jks` → senha → alias → senha.
+- **Cópia de segurança no GitHub** (02/10/2026): segredos `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD` e `ANDROID_KEY_ALIAS` no dimplus-app. Segredo não se lê pela tela;
+  para recuperar o `.jks`, rodar um workflow que faça
+  `echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > dimplus-upload.jks` e publique como artefato.
 - Chave de API da App Store Connect: "Automacao DIM+ GitHub", Key ID `G54TZ2S6BJ` (`.p8` só baixa uma vez).
 - Conta de serviço do Google Play: `dimplus-publicacao@dimplus-play.iam.gserviceaccount.com`,
   segredo `GOOGLE_SA_JSON` no GitHub.
