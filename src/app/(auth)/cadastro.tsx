@@ -80,6 +80,10 @@ export default function Cadastro() {
   // 10/09/2026 — e-mail REAL. É o canal do link de "esqueci minha senha"; sem ele a pessoa
   // depende da equipe para recuperar acesso. → BLOCO: TELA — RECUPERAR ACESSO
   const [email, setEmail] = useState('');
+  // 02/10/2026 — sexo e naturalidade: o parceiro do clube de farmácia exige os dois para gerar o
+  // cartão. Coletados aqui, o cartão sai depois só com a confirmação da data de nascimento.
+  const [sexo, setSexo] = useState<'M' | 'F' | null>(null);
+  const [naturalidade, setNaturalidade] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState<string | null>(null);
@@ -134,9 +138,11 @@ export default function Cadastro() {
     paraE164(telefone) !== null &&
     senha.length >= SENHA_MIN &&
     senha.length <= SENHA_MAX &&
-    // Opcional: vazio passa. Preenchido, tem que ter forma de e-mail — a rota valida com Zod
-    // e devolveria 400 genérico ("Confira os dados informados"), sem dizer qual campo.
-    (email.trim() === '' || emailValido(email));
+    // 02/10/2026 — e-mail passou a ser OBRIGATÓRIO no app: é o canal do acesso depois do
+    // pagamento e o parceiro do clube exige. (A rota segue aceitando sem, por builds antigos.)
+    emailValido(email) &&
+    sexo !== null &&
+    naturalidade.trim().length >= 2;
 
   async function onEnviar() {
     setErro(null);
@@ -153,6 +159,8 @@ export default function Cadastro() {
       // e derrubaria o cadastro inteiro com 400, por um campo que é opcional.
       email: email.trim() === '' ? undefined : email.trim().toLowerCase(),
       data_nascimento: nascimentoISO()!,
+      ...(sexo ? { sexo } : {}),
+      naturalidade: naturalidade.trim(),
       endereco_cep: cep.replace(/\D/g, ''),
       endereco_numero: numero.trim(),
       endereco_logradouro: logradouro.trim(),
@@ -398,7 +406,7 @@ export default function Cadastro() {
             ajuda={
               email.trim() !== '' && !emailValido(email)
                 ? 'E-mail inválido. Confira o endereço.'
-                : 'É por aqui que você recupera a senha se esquecer.'
+                : 'É por aqui que chega o acesso ao app e a recuperação da senha.'
             }
             maxLength={160}
           />
@@ -414,6 +422,28 @@ export default function Cadastro() {
                 : 'Se você já é cliente, isso libera seu acesso na hora.'
             }
             maxLength={10}
+          />
+          <Text style={s.rotulo}>Sexo</Text>
+          <View style={s.linhaOpcoes}>
+            {([['F', 'Feminino'], ['M', 'Masculino']] as const).map(([v, r]) => (
+              <Pressable
+                key={v}
+                onPress={() => setSexo(v)}
+                style={[s.opcao, sexo === v && s.opcaoOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sexo === v }}
+              >
+                <Text style={[s.opcaoTxt, sexo === v && s.opcaoTxtOn]}>{r}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Campo
+            rotulo="Cidade onde você nasceu"
+            valor={naturalidade}
+            onChange={setNaturalidade}
+            placeholder="Ex.: Osasco"
+            autoCapitalize="words"
+            maxLength={60}
           />
           <Campo
             rotulo="Criar senha"

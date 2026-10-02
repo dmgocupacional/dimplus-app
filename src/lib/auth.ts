@@ -109,6 +109,9 @@ export async function solicitarCadastro(dados: {
   email?: string;
   // 26/08 — prova de identidade do pré-cadastrado. Batendo com o cadastro, entra sem fila.
   data_nascimento?: string;
+  // 02/10/2026 — exigidos pelo parceiro do clube de farmácia (cartão Vidalink).
+  sexo?: 'M' | 'F';
+  naturalidade?: string;
   // Aceite capturado nesta tela, junto com vencimento e forma.
   termo_versao_id?: string;
   aceite?: boolean;

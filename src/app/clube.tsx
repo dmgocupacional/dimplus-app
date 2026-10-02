@@ -91,7 +91,13 @@ function PassoAdesao() {
   const [erro, setErro] = useState<string | null>(null);
 
   const camposVisiveis = CAMPOS.filter((c) => faltando?.includes(c.chave));
-  const incompleto = camposVisiveis.some((c) => !String(dados[c.dado] ?? '').trim());
+  // 02/10/2026 — o cadastro já coleta sexo e naturalidade: o normal é só confirmar a data de
+  // nascimento. O sexo só aparece se o erp disser que falta (cadastros antigos).
+  const precisaSexo = !!faltando?.includes('sexo');
+  const incompleto = camposVisiveis.some((c) => !String(dados[c.dado] ?? '').trim()) || (precisaSexo && !sexo);
+  const nascimentoBr = cliente?.data_nascimento
+    ? cliente.data_nascimento.slice(0, 10).split('-').reverse().join('/')
+    : null;
 
   function mudar(dado: keyof DadosAdesao, valor: string) {
     setDados((d) => ({ ...d, [dado]: valor }));
@@ -112,10 +118,10 @@ function PassoAdesao() {
   }
 
   async function confirmar() {
-    if (enviando || !sexo || incompleto) return;
+    if (enviando || incompleto) return;
     setEnviando(true);
     setErro(null);
-    const limpos: DadosAdesao = { sexo };
+    const limpos: DadosAdesao = sexo ? { sexo } : {};
     for (const c of camposVisiveis) {
       const v = String(dados[c.dado] ?? '').trim();
       if (v) (limpos as Record<string, string>)[c.dado] = c.chave === 'uf' ? v.toUpperCase() : v;
@@ -125,7 +131,7 @@ function PassoAdesao() {
     if (!r.ok) {
       // 422 com a lista: mostra só os campos que faltam, sem tratar como erro da pessoa.
       if (r.faltando && r.faltando.length > 0) {
-        const doFormulario = r.faltando.filter((f) => CAMPOS.some((c) => c.chave === f));
+        const doFormulario = r.faltando.filter((f) => f === 'sexo' || CAMPOS.some((c) => c.chave === f));
         if (doFormulario.length > 0) {
           setFaltando(doFormulario);
           return;
@@ -159,9 +165,18 @@ function PassoAdesao() {
           <Text style={s.texto}>
             {faltando && faltando.length > 0
               ? 'Quase lá. Para emitir o cartão, o parceiro precisa destes dados:'
-              : 'O seu plano dá direito a descontos em remédios nas farmácias conveniadas. Para gerar o cartão, confirme os dados abaixo. Leva menos de um minuto.'}
+              : 'O seu plano dá direito a descontos em remédios nas farmácias conveniadas. Para gerar o cartão, só confirme a sua data de nascimento.'}
           </Text>
 
+          {!faltando && nascimentoBr ? (
+            <View style={s.confirmaNasc}>
+              <Text style={s.rotulo}>DATA DE NASCIMENTO</Text>
+              <Text style={s.nascValor}>{nascimentoBr}</Text>
+              <Text style={s.nota}>Se não for essa, fale com a gente pela Ajuda antes de gerar o cartão.</Text>
+            </View>
+          ) : null}
+
+          {precisaSexo ? (<>
           <Text style={s.rotulo}>SEXO</Text>
           <View style={s.opcoes}>
             {OPCOES.map((o) => {
@@ -177,6 +192,7 @@ function PassoAdesao() {
               );
             })}
           </View>
+          </>) : null}
 
           {camposVisiveis.map((c) => (
             <View key={c.chave}>
@@ -201,13 +217,13 @@ function PassoAdesao() {
 
           <Pressable
             onPress={confirmar}
-            disabled={!sexo || incompleto || enviando}
-            style={[s.botao, (!sexo || incompleto || enviando) && s.botaoOff]}
+            disabled={incompleto || enviando}
+            style={[s.botao, (incompleto || enviando) && s.botaoOff]}
           >
             {enviando ? (
               <ActivityIndicator color={color.navy} />
             ) : (
-              <Text style={s.botaoTxt}>Gerar meu cartão</Text>
+              <Text style={s.botaoTxt}>{!faltando && nascimentoBr ? 'Está certa, gerar meu cartão' : 'Gerar meu cartão'}</Text>
             )}
           </Pressable>
 
@@ -422,6 +438,8 @@ const s = StyleSheet.create({
     marginTop: space.xl,
   },
   opcoes: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
+  confirmaNasc: { marginTop: space.sm },
+  nascValor: { fontFamily: font.bold, fontSize: size.xl, color: color.navy, marginTop: space.xs },
   opcao: {
     flex: 1,
     paddingVertical: space.md,
