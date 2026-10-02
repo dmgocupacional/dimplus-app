@@ -20,13 +20,28 @@
 7. **Privacidade do app**: conferir com a política (`https://erp-dimplus.vercel.app/privacidade`).
 8. **Adicionar para revisão → Enviar**. Lançamento: automático depois de aprovado.
 
-## Play Store (manual)
-- App: `com.javenessi.dimmsaude`, conta de organização "Dimeg".
-- **Testar e lançar → Produção → Criar nova versão** → subir o `.aab` → notas → revisar → lançar.
+## Play Store
+- App: `com.javenessi.dimmsaude` (o PACOTE é para sempre esse; a redefinição de 23/09 trocou só a
+  CHAVE DE UPLOAD), conta de organização "Dimeg". Verificação de desenvolvedor Android: já registrado.
+- Fluxo: `publicar-lojas.yml` manda o `.aab` para o **teste interno** → `promover-android.yml`
+  (disparo manual, input `version_code`) leva para **produção** → 🔴 **a publicação gerenciada está
+  ligada**: alguém precisa clicar **Publicar** no Play Console (Visão geral da publicação). Sem o
+  clique a versão fica parada — foi o que segurou a 4.34.5 de 30/09 a 02/10/2026.
+- Manual: **Testar e lançar → Produção → Criar nova versão** → `.aab` → notas → revisar → lançar.
 - versionCode do build tem de ser maior que o publicado.
 - Capturas: **proporção até 2:1** — o formato do iPhone 6,9" é recusado; usar 1080×1920.
+- Ficha (Presença na loja → Páginas de detalhes do app → **Editar página de detalhes padrão**):
+  ícone 512×512 (`fastlane/metadata/android/pt-BR/images/icon.png`) e recurso gráfico 1024×500
+  obrigatório.
+- O envio pelo conector do Expo falha ("conflict between exclusive peers"): usar os workflows.
 
-## Credenciais (cofre da DIMEG, nunca no repositório)
-- Chave de upload Android: `dimplus-upload.jks`, alias `dimeg-upload`.
+## Credenciais (cofre da DIMEG, NUNCA no repositório)
+- Chave de upload Android: `dimplus-upload.jks`, alias `dimeg-upload`, SHA1 `FC:27:32:C2:…:30:C3:0D`,
+  SHA256 `B9:78:37:C6:…`. Senha no `CREDENCIAIS-LEIA.txt` que acompanha o `.jks` (cópia no
+  computador do Henrique, Downloads). Cadastrada no EAS como padrão do pacote (recadastrada em
+  02/10/2026 depois de o identificador ter sido apagado no Expo). Para recadastrar:
+  `eas credentials -p android` → production → Keystore → Set up a new keystore → Generate? **NÃO**
+  → caminho do `.jks` → senha → alias → senha.
 - Chave de API da App Store Connect: "Automacao DIM+ GitHub", Key ID `G54TZ2S6BJ` (`.p8` só baixa uma vez).
-- Conta de serviço do Google Play: pendente (segredo `GOOGLE_SA_JSON`).
+- Conta de serviço do Google Play: `dimplus-publicacao@dimplus-play.iam.gserviceaccount.com`,
+  segredo `GOOGLE_SA_JSON` no GitHub.
