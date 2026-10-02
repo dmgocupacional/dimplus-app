@@ -1,0 +1,20 @@
+# ═══ BLOCO: APPLE — DIAGNÓSTICO DE ENVIO ═══
+# 02/10/2026. Pergunta à Apple o que impede a versão de ir para revisão. Não envia nada.
+name: Apple - diagnóstico de envio
+on:
+  workflow_dispatch:
+    inputs:
+      versao: { description: versão (ex. 4.34.6), required: true, default: "4.34.6" }
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyjwt cryptography requests
+      - env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          VERSAO: ${{ inputs.versao }}
+        run: python scripts/diagnostico_apple.py
+# ── FIM BLOCO ──
