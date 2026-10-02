@@ -19,6 +19,11 @@
 | Dependentes (titular ↔ dependente) | `docs/ROADMAP-DEPENDENTES.md` neste repo |
 | Ordem geral das frentes do ERP | `erp-dimplus/docs/PLANO-MESTRE.md` |
 
+## 📍 Estado do app — 02/10/2026 · v4.36.1 · SDK 57
+- Lojas: Play 4.34.6 em produção; Apple 4.34.6 em revisão. OTA 4.36.1 no ar (cadastro com sexo/naturalidade/e-mail, clube só confirma nascimento, exames).
+- Publicação: `publicar-lojas.yml` faz tudo sozinho (Android promove para produção; iOS reenvia revisão). Ver `docs/PUBLICAR-LOJAS.md`.
+- Sessão: `docs/sessions/2026-10-02-play-producao-e-icone-claro.md`.
+
 ## 📍 Estado do app — 25/09/2026 · v4.26.0 · SDK 57
 
 - **App Store:** 4.23.0 publicada; JS v4.26.0 pelo OTA do canal `production`. **Play Store:**
