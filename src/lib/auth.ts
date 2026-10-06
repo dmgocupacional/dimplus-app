@@ -256,10 +256,12 @@ export async function pedirPrimeiroAcesso(dados: {
   aceite: true;
 }): Promise<ResultadoCampos> {
   try {
+    // 06/10/2026 — rastreio: o ERP registra cada pedido em `app_tentativas_acesso`.
+    const plataforma = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
     const resp = await fetch(`${API_BASE}/api/public/app-primeiro-acesso`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dados),
+      body: JSON.stringify({ ...dados, plataforma, versao_app: APP_VERSION }),
     });
     const json = (await resp.json()) as {
       ok?: boolean;
