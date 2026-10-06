@@ -15,7 +15,10 @@
 // reconstruiria pelo lado do app o oráculo de enumeração de CPF que as rotas existem para
 // não ser. Se a mensagem parecer vaga demais para o usuário, ela está certa.
 
+import { Platform } from 'react-native';
+
 import { supabase, API_BASE } from './supabase';
+import { APP_VERSION } from './version';
 
 /**
  * Telefone → E.164 (+55DDDNNNNNNNN), ou null.
@@ -313,25 +316,32 @@ export type SituacaoCpf =
   // recuperar senha (não há o que recuperar), é a tela de primeiro acesso.
   | { ok: true; situacao: 'sem_conta'; ativo: boolean }
   // 15/09/2026 — plano não ativo. Terminal: a saída é falar com a equipe, não corrigir campo.
-  | { ok: true; situacao: 'bloqueado'; status: string }
+  | { ok: true; situacao: 'bloqueado'; status: string; tentativaId: string | null }
   // 15/09/2026 — cliente sem plano. Terminal: sem plano não dá para saber qual termo se
   // aplica, e assinar o errado é pior que não assinar. São 84 ativos sem conta.
   | { ok: true; situacao: 'sem_plano' }
   | { ok: true; situacao: 'nao_cliente' }
   | { ok: false; erro: string };
 
-export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
+export async function consultarSituacaoCpf(
+  cpf: string,
+  tela: 'primeiro_acesso' | 'recuperar' = 'recuperar',
+): Promise<SituacaoCpf> {
   try {
+    // 06/10/2026 — rastreio: o ERP grava cada consulta em `app_tentativas_acesso`. Plataforma e
+    // versão vão daqui porque o User-Agent sozinho não diz a versão do app.
+    const plataforma = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
     const resp = await fetch(`${API_BASE}/api/public/app-recuperar/consultar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cpf }),
+      body: JSON.stringify({ cpf, plataforma, versao_app: APP_VERSION, tela }),
     });
     const json = (await resp.json()) as {
       situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente' | 'bloqueado' | 'sem_plano';
       mascara?: string;
       ativo?: boolean;
       status?: string;
+      tentativa_id?: string;
       error?: string;
     };
     if (!resp.ok || !json.situacao) {
@@ -344,7 +354,12 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
       return { ok: true, situacao: 'sem_plano' };
     }
     if (json.situacao === 'bloqueado') {
-      return { ok: true, situacao: 'bloqueado', status: json.status ?? '' };
+      return {
+        ok: true,
+        situacao: 'bloqueado',
+        status: json.status ?? '',
+        tentativaId: json.tentativa_id ?? null,
+      };
     }
     if (json.situacao === 'sem_conta') {
       return { ok: true, situacao: 'sem_conta', ativo: json.ativo === true };
@@ -353,4 +368,17 @@ export async function consultarSituacaoCpf(cpf: string): Promise<SituacaoCpf> {
   } catch {
     return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' };
   }
+}
+
+/**
+ * 06/10/2026 — marca no ERP que a pessoa bloqueada tocou em "Falar no WhatsApp". Fecha o funil
+ * do rastreio (bateu na parede → pediu ajuda ou desistiu). Silenciosa: nunca atrapalha a tela.
+ */
+export function registrarCliqueWhats(tentativaId: string | null): void {
+  if (!tentativaId) return;
+  void fetch(`${API_BASE}/api/public/app-recuperar/whatsapp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tentativa_id: tentativaId }),
+  }).catch(() => undefined);
 }

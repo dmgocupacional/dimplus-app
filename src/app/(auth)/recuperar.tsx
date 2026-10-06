@@ -28,7 +28,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Campo } from '@/components/Campo';
-import { consultarSituacaoCpf, cpfValido, emailValido, recuperarAcesso } from '@/lib/auth';
+import {
+  consultarSituacaoCpf,
+  cpfValido,
+  emailValido,
+  recuperarAcesso,
+  registrarCliqueWhats,
+} from '@/lib/auth';
 import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
@@ -36,6 +42,19 @@ import { color, font, radius, size, space } from '@/theme/tokens';
 // em um lugar só. → src/app/ajuda.tsx
 const WHATS = '5511995193094';
 const WHATS_LEGIVEL = '(11) 99519-3094';
+
+// 06/10/2026 — o modal dizia "o plano não está ativo" para todo mundo, inclusive para quem
+// acabou de pagar a mensalidade do mês mas tem fatura antiga em aberto (o caso que motivou o
+// rastreio). Cada status ganha o texto que explica o que a pessoa precisa resolver.
+function textoDoBloqueio(status: string): string {
+  if (status === 'overdue')
+    return 'Encontramos mensalidade em aberto no seu plano, então ainda não conseguimos liberar o acesso por aqui. Mesmo que você tenha pago a deste mês, pode haver uma anterior pendente. Fale com a nossa equipe que a gente confere e resolve.';
+  if (status === 'aguardando_pagamento')
+    return 'Seu cadastro está aguardando a confirmação do primeiro pagamento. Assim que ele for confirmado, o acesso é liberado. Se você já pagou, fale com a nossa equipe.';
+  if (status === 'cancelado' || status === 'churn')
+    return 'O plano desse CPF foi encerrado. Fale com a nossa equipe para reativar e liberar o seu acesso.';
+  return 'O plano desse CPF não está ativo no momento, então não conseguimos liberar o acesso por aqui. Fale com a nossa equipe que a gente resolve.';
+}
 
 type Etapa =
   | { nome: 'cpf' }
@@ -61,6 +80,8 @@ export default function Recuperar() {
   // Dois bloqueios terminais, com textos e assuntos de WhatsApp diferentes: "plano não está
   // ativo" e "cadastro incompleto" pedem coisas distintas da equipe.
   const [bloqueado, setBloqueado] = useState<'plano' | 'cadastro' | null>(null);
+  const [statusBloqueio, setStatusBloqueio] = useState('');
+  const [tentativaId, setTentativaId] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -82,6 +103,8 @@ export default function Recuperar() {
       return;
     }
     if (r.situacao === 'bloqueado') {
+      setStatusBloqueio(r.status);
+      setTentativaId(r.tentativaId);
       setBloqueado('plano');
       return;
     }
@@ -334,7 +357,7 @@ export default function Recuperar() {
             </Text>
             <Text style={s.textoModal}>
               {bloqueado === 'plano'
-                ? 'O plano desse CPF não está ativo no momento, então não conseguimos liberar o acesso por aqui. Fale com a nossa equipe que a gente resolve.'
+                ? textoDoBloqueio(statusBloqueio)
                 : 'Esse CPF é cliente DIM+, mas ainda não tem um plano vinculado no nosso sistema. Fale com a nossa equipe que a gente completa e libera o seu acesso.'}
             </Text>
             <Text style={s.telefoneModal}>{WHATS_LEGIVEL}</Text>
@@ -349,6 +372,7 @@ export default function Recuperar() {
                     ? 'Olá! Tentei acessar o app do DIM+ e apareceu que o meu cadastro está bloqueado.'
                     : 'Olá! Tentei acessar o app do DIM+ e apareceu que o meu cadastro está incompleto, sem plano vinculado.',
                 );
+                registrarCliqueWhats(tentativaId);
                 void Linking.openURL(`https://wa.me/${WHATS}?text=${texto}`);
               }}
             >
