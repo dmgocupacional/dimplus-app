@@ -50,7 +50,7 @@ function Splash() {
 }
 
 function Roteador() {
-  const { estado, aceitePendente, clube, incluiClube } = useSession();
+  const { estado, aceitePendente, clube, incluiClube, cliente } = useSession();
   const segments = useSegments();
   const router = useRouter();
 
@@ -137,14 +137,17 @@ function Roteador() {
     // 28/09/2026 — plano sem clube (DIM+ Vigent, até o contrato autorizar o GrupoSin): não força a
     // adesão. O erp também recusa criar a assinatura (403 clube_nao_incluso).
     // Demonstração: a adesão ao clube é uma escrita (recusada no ERP) — a trava prenderia a pessoa.
-    if (!demo && incluiClube && (clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
+    // 08/10/2026 — DEPENDENTE NUNCA passa pela trava: o benefício é da família, em nome do titular
+    // (modelo do parceiro). Ele usa o cartão do titular; não há nada que ele precise fazer.
+    const ehDependente = !!cliente?.dependente;
+    if (!demo && !ehDependente && incluiClube && (clube === null || faltaVidalink) && !noClube && !clubeDispensado()) {
       router.replace('/clube' as never);
       return;
     }
 
     // pronto
     if (emAuth) router.replace('/' as never);
-  }, [estado, aceitePendente, clube, incluiClube, segments, router, demo]);
+  }, [estado, aceitePendente, clube, incluiClube, cliente?.dependente, segments, router, demo]);
 
   if (estado === 'carregando') return <Splash />;
 

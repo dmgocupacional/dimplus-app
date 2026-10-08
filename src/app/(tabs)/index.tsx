@@ -183,7 +183,9 @@ export default function Inicio() {
             <View style={{ width: larguraCartao, marginLeft: space.md }}>
               <Pressable onPress={() => router.push('/clube' as never)}>
                 <CartaoClube
-                  nome={cliente.nome ?? ''}
+                  // 08/10/2026 — dependente vê o cartão da família, que está no nome do titular.
+                  nome={clube.familia_de ?? cliente.nome ?? ''}
+                  familia={!!clube.familia_de}
                   numero={clube.cartao_vidalink}
                   ativo={clube.ativa && elegivel}
                   validade={clube.vidalink_validade}

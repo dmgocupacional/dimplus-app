@@ -50,10 +50,12 @@ const OPCOES: { valor: Sexo; rotulo: string }[] = [
 ];
 
 export default function AdesaoClube() {
-  const { clube } = useSession();
+  const { clube, cliente } = useSession();
   if (clube && clube.cartao_vidalink) {
-    return <ClubePronto numero={clube.cartao_vidalink} validade={clube.vidalink_validade} />;
+    return <ClubePronto numero={clube.cartao_vidalink} validade={clube.vidalink_validade} familiaDe={clube.familia_de} />;
   }
+  // 08/10/2026 — dependente nunca adere: o benefício é da família, em nome do titular.
+  if (!clube && cliente?.dependente) return <AguardandoTitular />;
   // 25/09/2026 — sem passo manual: quem aderiu e ainda não tem o cartão Vidalink gravado fica
   // aqui enquanto o erp ATIVA o cartão sozinho (ver erp: lib/drachei-vidalink.ts).
   if (clube) return <AtivandoCartao />;
@@ -364,7 +366,26 @@ function ImagemCartaoFarmacia() {
 }
 // ── FIM BLOCO ──
 
-function ClubePronto({ numero, validade }: { numero: string; validade: string | null }) {
+// 08/10/2026 — dependente cujo titular ainda não tem o benefício ativo. Nada a fazer da parte
+// dele: a adesão nasce no servidor (pagamento, cron ou cadastro do titular).
+function AguardandoTitular() {
+  return (
+    <Screen titulo="Clube de descontos">
+      <Card style={s.centroCard}>
+        <Titulo>Benefício da família em ativação</Titulo>
+        <Text style={s.texto}>
+          O clube de descontos e o cartão de farmácia ficam no nome do titular do seu plano e valem
+          para toda a família. Assim que forem ativados, aparecem aqui automaticamente.
+        </Text>
+      </Card>
+      <Pressable onPress={sairDoClube} style={s.continuar}>
+        <Text style={s.continuarTxt}>Continuar para o app</Text>
+      </Pressable>
+    </Screen>
+  );
+}
+
+function ClubePronto({ numero, validade, familiaDe }: { numero: string; validade: string | null; familiaDe: string | null }) {
   // Ao abrir o clube, o que mudou no ERP (dependentes, dados, plano) chega ao parceiro na hora.
   useEffect(() => {
     void sincronizarClube();
@@ -376,11 +397,12 @@ function ClubePronto({ numero, validade }: { numero: string; validade: string | 
     <Screen titulo="Clube de descontos">
       <ScrollView contentContainerStyle={s.conteudo}>
         <Card>
-          <Titulo>Seu cartão de farmácia</Titulo>
+          <Titulo>{familiaDe ? 'Cartão de farmácia da família' : 'Seu cartão de farmácia'}</Titulo>
           <ImagemCartaoFarmacia />
           <Text style={s.texto}>
-            Apresente o cartão Vidalink na farmácia conveniada. Ele também está na tela inicial,
-            ao lado do seu cartão DIM+.
+            {familiaDe
+              ? `O cartão Vidalink está em nome de ${familiaDe.split(' ')[0]}, titular do plano, e vale para toda a família. Na farmácia conveniada, informe este número.`
+              : 'Apresente o cartão Vidalink na farmácia conveniada. Ele também está na tela inicial, ao lado do seu cartão DIM+.'}
           </Text>
           <Text style={s.rotulo}>Nº DO CARTÃO</Text>
           <Text style={s.numero}>

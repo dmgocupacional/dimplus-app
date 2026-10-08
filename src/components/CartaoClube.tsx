@@ -35,8 +35,11 @@ export function CartaoClube({
   numero,
   ativo,
   validade,
+  familia = false,
 }: {
   nome: string;
+  /** 08/10/2026 — dependente vendo o cartão da família (em nome do titular). */
+  familia?: boolean;
   numero: string | null;
   ativo: boolean;
   /** Validade do Vidalink lida do clube (AAAA-MM-DD). Sem ela, o rodapé não fala de prazo. */
@@ -60,7 +63,7 @@ export function CartaoClube({
 
       <View style={s.topo}>
         <View>
-          <Text style={s.rotulo}>CARTÃO DE FARMÁCIA</Text>
+          <Text style={s.rotulo}>{familia ? 'CARTÃO DA FAMÍLIA' : 'CARTÃO DE FARMÁCIA'}</Text>
           <Text style={s.titulo}>Vidalink</Text>
         </View>
         {numero ? (

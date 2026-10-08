@@ -171,9 +171,31 @@ export interface CartaoClube {
   cartao_vidalink: string | null;
   /** Validade do cartão Vidalink (AAAA-MM-DD), lida do clube. `null` = desconhecida. */
   vidalink_validade: string | null;
+  /**
+   * 08/10/2026 — nome do TITULAR quando quem está logado é dependente: o cartão é o da família,
+   * em nome dele. `null` para o próprio titular.
+   */
+  familia_de: string | null;
 }
 
+/**
+ * 08/10/2026 — o parceiro trabalha com UMA assinatura por família, em nome do titular (José,
+ * 08/10). A tabela só devolve a própria linha a cada um, então o dependente não via nada, era
+ * mandado para a adesão e ganhava assinatura avulsa no CPF dele. Agora quem resolve "qual
+ * cartão vale para mim" é o erp (/api/app/drachei/familia). Se o erp não responder, cai na
+ * leitura direta — que continua certa para o titular.
+ */
 export async function getCartaoClube(): Promise<CartaoClube | null> {
+  const r = await chamarFeegow<{
+    eh_dependente: boolean;
+    titular_nome: string | null;
+    cartao: Omit<CartaoClube, 'familia_de'> | null;
+  }>('/api/app/drachei/familia');
+  if (r.ok) {
+    if (!r.dados.cartao) return null;
+    return { ...r.dados.cartao, familia_de: r.dados.eh_dependente ? r.dados.titular_nome ?? 'titular' : null };
+  }
+
   const { data, error } = await supabase
     .from('drachei_assinaturas')
     .select('numero_cartao, plano_nome, status, cartao_vidalink, vidalink_validade')
@@ -185,6 +207,7 @@ export async function getCartaoClube(): Promise<CartaoClube | null> {
     ativa: data.status === 'ativa',
     cartao_vidalink: data.cartao_vidalink ?? null,
     vidalink_validade: data.vidalink_validade ?? null,
+    familia_de: null,
   };
 }
 
