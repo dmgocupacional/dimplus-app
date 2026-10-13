@@ -10,11 +10,12 @@ import { Alert, Platform } from 'react-native';
 const CHAVE = 'dimplus_demo_empresa';
 const SLUG = /^[a-z0-9-]{2,40}$/;
 /** Sites que podem comandar a navegação do app em demonstração. */
-const ORIGEM_SITE = /^https:\/\/bemvindo\.[a-z0-9-]+\.dimeg\.com\.br$|^http:\/\/localhost(:\d+)?$/;
-/** Rotas que o site pode abrir (nada além disto). */
+// 13/10/2026: + bem-vindo.dimmsaude.com.br (site do cliente PF, demo 'dimplus').
+const ORIGEM_SITE = /^https:\/\/bemvindo\.[a-z0-9-]+\.dimeg\.com\.br$|^https:\/\/bem-vindo\.dimmsaude\.com\.br$|^http:\/\/localhost(:\d+)?$/;
 /** Rotas que são ABAS (trocar de aba, sem empilhar). */
-export const ROTAS_ABA = new Set(['/', '/rede', '/familia', '/perfil']);
-export const ROTAS_DEMO = new Set(['/', '/rede', '/familia', '/perfil', '/agendar', '/farmacias', '/clube', '/ajuda', '/meus-agendamentos']);
+export const ROTAS_ABA = new Set(['/', '/rede', '/familia', '/financeiro', '/perfil']);
+/** Rotas que o site pode abrir (nada além disto). '/financeiro' só aparece em plano PF. */
+export const ROTAS_DEMO = new Set(['/', '/rede', '/familia', '/financeiro', '/perfil', '/agendar', '/farmacias', '/clube', '/ajuda', '/meus-agendamentos']);
 
 /** Empresa da demonstração, ou null fora dela. Guarda na sessão do navegador: a URL perde o
  *  `?demo=` quando o app navega. */
