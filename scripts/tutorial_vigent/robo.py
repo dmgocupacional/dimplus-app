@@ -1,13 +1,19 @@
 """Robô do tutorial Vigent — grava o APP REAL (versão web) logado na conta de demonstração Vigent.
 Cada capítulo vira um vídeo vertical 1080x1920 + fotos dos passos. O "dedo" (círculo) mostra
-onde se toca. Credenciais: DEMO_VIGENT_CPF / DEMO_VIGENT_SENHA (ambiente), nunca no código."""
+onde se toca. Credenciais: DEMO_VIGENT_CPF / DEMO_VIGENT_SENHA (ambiente), nunca no código.
+13/10/2026: com DEMO_SLUG (ex.: dimplus) o login é a entrada automática da demonstração
+(`?demo=<slug>`, ERP /api/public/app-demo-login) e não precisa de CPF nem senha."""
 import asyncio, os, shutil, subprocess
 from pathlib import Path
 from playwright.async_api import async_playwright
 
 URL = os.environ.get('APP_WEB_URL', 'https://dimplus-web.vercel.app')
-CPF = os.environ['DEMO_VIGENT_CPF']
-SENHA = os.environ['DEMO_VIGENT_SENHA']
+DEMO_SLUG = os.environ.get('DEMO_SLUG', '')
+CPF = os.environ.get('DEMO_VIGENT_CPF', '')
+SENHA = os.environ.get('DEMO_VIGENT_SENHA', '')
+if not DEMO_SLUG and not (CPF and SENHA):
+    raise SystemExit('Defina DEMO_SLUG ou DEMO_VIGENT_CPF + DEMO_VIGENT_SENHA')
+PREFIXO_VIDEO = os.environ.get('PREFIXO_VIDEO', 'dimplus-vigent')
 SAIDA = Path(os.environ.get('SAIDA', '/home/claude/tutorial'))
 W, H = 360, 640  # 1080x1920 com escala 3
 
@@ -55,7 +61,7 @@ class Robo:
         await self.ctx.close(); await self.b.close(); await self.p.stop()
         if video:
             bruto = await video.path()
-            destino = SAIDA / 'videos' / f'dimplus-vigent-{self.cap}.mp4'
+            destino = SAIDA / 'videos' / f'{PREFIXO_VIDEO}-{self.cap}.mp4'
             filtro = 'scale=720:1280:flags=lanczos,fps=30'
             if self.cortes:
                 # remove os trechos de espera e refaz a linha do tempo
@@ -83,6 +89,11 @@ class Robo:
         await self.pg.goto(URL, wait_until='networkidle', timeout=90000); await self.espera(2500)
 
     async def login(self, devagar: bool = False):
+        if DEMO_SLUG:
+            # Entrada automática da demonstração: o app chama o ERP e já abre logado.
+            await self.pg.goto(f'{URL}/?demo={DEMO_SLUG}', wait_until='networkidle', timeout=90000)
+            await self.aguarda('Olá,', maximo=60000)
+            return
         await self.abrir_login()
         campos = await self.pg.query_selector_all('input')
         if devagar:

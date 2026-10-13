@@ -1,0 +1,78 @@
+# 13/10/2026. Roda o robô do tutorial (scripts/tutorial_vigent) contra o app web e devolve as
+# fotos (jpg) e os vídeos como artefato. Serve aos sites de boas-vindas (bemvindo.vigent e
+# bem-vindo.dimmsaude). Só LEITURA: a conta de demonstração tem toda escrita travada no ERP.
+# Com demo_slug o robô entra pela demonstração (?demo=<slug>), sem CPF nem senha.
+name: Tutorial — capturas do app
+
+on:
+  workflow_dispatch:
+    inputs:
+      demo_slug:
+        description: Demonstração a usar (dimplus = cliente PF)
+        required: true
+        default: dimplus
+      capitulos:
+        description: "Lista separada por espaço: script:argumento (ex.: cap_pf.py:ativar)"
+        required: true
+        default: "cap_pf.py:ativar cap_cartoes_unidades.py:cartoes cap_familia_ajuda.py:familia cap_pf.py:financeiro"
+
+concurrency:
+  group: tutorial-capturas
+  cancel-in-progress: false
+
+jobs:
+  capturar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Playwright, Pillow e ffmpeg
+        run: |
+          pip install playwright pillow
+          python -m playwright install --with-deps chromium
+          sudo apt-get install -y ffmpeg
+
+      - name: Gravar capítulos
+        env:
+          DEMO_SLUG: ${{ inputs.demo_slug }}
+          PREFIXO_VIDEO: dimplus-${{ inputs.demo_slug }}
+          SAIDA: ${{ runner.temp }}/tutorial
+          CAPITULOS: ${{ inputs.capitulos }}
+        run: |
+          cd scripts/tutorial_vigent
+          for item in $CAPITULOS; do
+            script="${item%%:*}"; arg="${item#*:}"
+            echo "::group::$script $arg"
+            python "$script" "$arg"
+            echo "::endgroup::"
+          done
+
+      - name: Converter fotos para jpg (mesmo formato dos sites)
+        env:
+          SAIDA: ${{ runner.temp }}/tutorial
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from PIL import Image
+          raiz = Path(os.environ['SAIDA']) / 'fotos'
+          for png in raiz.rglob('*.png'):
+              Image.open(png).convert('RGB').save(png.with_suffix('.jpg'), quality=82, optimize=True)
+              png.unlink()
+          print(sorted(str(p.relative_to(raiz)) for p in raiz.rglob('*.jpg')))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tutorial-${{ inputs.demo_slug }}
+          path: |
+            ${{ runner.temp }}/tutorial/fotos
+            ${{ runner.temp }}/tutorial/videos
+          retention-days: 14
