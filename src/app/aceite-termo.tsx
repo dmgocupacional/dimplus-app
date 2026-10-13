@@ -53,6 +53,13 @@ export default function AceiteTermo() {
   const [forma, setForma] = useState<FormaPagamento>('BOLETO');
   const [enviando, setEnviando] = useState(false);
   const [consentiu, setConsentiu] = useState(false);
+  // Texto curto que cabe inteiro na caixa nunca dispara onScroll — o botão travava para sempre
+  // (13/10/2026, termo de teste da Dimeg). Se não há o que rolar, já foi lido por inteiro.
+  const [alturaCaixa, setAlturaCaixa] = useState(0);
+  const [alturaTexto, setAlturaTexto] = useState(0);
+  useEffect(() => {
+    if (alturaCaixa > 0 && alturaTexto > 0 && alturaTexto <= alturaCaixa + 24) setLeuAteOFim(true);
+  }, [alturaCaixa, alturaTexto]);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -160,6 +167,8 @@ export default function AceiteTermo() {
           }
         }}
         scrollEventThrottle={64}
+        onLayout={(e) => setAlturaCaixa(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_w, h) => setAlturaTexto(h)}
       >
         <Text style={s.texto}>{dados.termo.texto}</Text>
       </ScrollView>
