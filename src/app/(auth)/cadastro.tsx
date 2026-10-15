@@ -141,8 +141,8 @@ export default function Cadastro() {
     // 02/10/2026 — e-mail passou a ser OBRIGATÓRIO no app: é o canal do acesso depois do
     // pagamento e o parceiro do clube exige. (A rota segue aceitando sem, por builds antigos.)
     emailValido(email) &&
-    sexo !== null &&
-    naturalidade.trim().length >= 2;
+    // 15/10/2026: naturalidade virou opcional no parceiro do clube.
+    sexo !== null;
 
   async function onEnviar() {
     setErro(null);
