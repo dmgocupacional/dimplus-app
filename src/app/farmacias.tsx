@@ -7,6 +7,9 @@
 // → BLOCO: FARMÁCIAS VIDALINK (DADOS) (src/lib/farmacias.ts)
 // → BLOCO: CLUBE DE DESCONTOS (src/lib/clube.ts) para rota e ligação.
 // 28/09/2026 — aba MAPA: pins das farmácias e o ponto azul da pessoa dentro do app.
+// 15/10/2026 — busca por PONTO: GPS ou CEP → as mais próximas na base própria do erp, num raio de
+// 30 km e atravessando cidades (antes: só a cidade inteira, que em SP capital passava de 1.600).
+// Cidade ainda fora da base → cai na leitura por cidade, como antes. "Trocar cidade" continua.
 // → BLOCO: MAPA — FARMÁCIAS CONVENIADAS (src/components/MapaFarmacias.tsx)
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -30,13 +33,16 @@ import {
   UFS,
   buscarCidades,
   buscarFarmacias,
+  buscarPerto,
   distanciaM,
   formatarDistancia,
+  mascararCep,
   normalizar,
   pegarLocalizacao,
   type Farmacia,
   type ListaFarmacias,
   type Posicao,
+  type ResultadoPerto,
 } from '@/lib/farmacias';
 import { useSession } from '@/state/session';
 import { color, font, radius, size, space } from '@/theme/tokens';
@@ -88,6 +94,18 @@ function filtrar(farmacias: Item[], busca: string, rede: string, so24h: boolean)
   });
 }
 
+/** Resultado da busca por ponto no formato que a tela já usa. */
+function listaDoPonto(r: ResultadoPerto): ListaFarmacias {
+  return {
+    uf: r.cobertura.uf ?? '',
+    cidade: r.cobertura.cidade ?? r.centro.rotulo,
+    farmacias: r.farmacias,
+    geocode_pendente: 0,
+    atualizado_em: new Date().toISOString(),
+    desatualizado: false,
+  };
+}
+
 function enderecoCompleto(f: Farmacia): string {
   return `${f.endereco}, ${f.bairro}, ${f.cidade} - ${f.uf}, ${f.cep}`;
 }
@@ -106,6 +124,11 @@ export default function Farmacias() {
   const [selecionada, setSelecionada] = useState<number | null>(null);
   const [semPermissao, setSemPermissao] = useState(false);
   const [pertoDeVoce, setPertoDeVoce] = useState(false);
+  // Busca por ponto: rótulo do lugar (endereço do CEP ou "sua localização"); null = por cidade.
+  const [ponto, setPonto] = useState<{ rotulo: string; aproximado: boolean } | null>(null);
+  const [gps, setGps] = useState<{ pos: Posicao; uf: string | null; cidade: string | null } | null>(null);
+  const [cep, setCep] = useState('');
+  const [cepErro, setCepErro] = useState<string | null>(null);
   const repeticoes = useRef(0);
 
   const carregar = useCallback(async (alvo?: { uf: string; cidade: string }, silencioso = false) => {
@@ -123,23 +146,82 @@ export default function Farmacias() {
     }
   }, []);
 
-  // Abre onde a pessoa ESTÁ. Sem permissão ou sem GPS: cidade do cadastro, como antes.
-  useEffect(() => {
-    void (async () => {
-      const l = await pegarLocalizacao();
-      if (l.tipo === 'ok') {
-        setPos(l.pos);
-        if (l.uf && l.cidade) {
-          setPertoDeVoce(true);
-          await carregar({ uf: l.uf, cidade: l.cidade });
-          return;
-        }
-      } else if (l.tipo === 'negada') {
-        setSemPermissao(true);
-      }
-      await carregar();
-    })();
+  function limparFiltros() {
+    repeticoes.current = 0;
+    setBusca('');
+    setRede(TODAS);
+    setSo24h(false);
+    setSelecionada(null);
+  }
+
+  /** Base própria primeiro; vazia ou cidade ainda não lida → leitura por cidade. */
+  const porPonto = useCallback(async (g: { pos: Posicao; uf: string | null; cidade: string | null }) => {
+    setEstado({ fase: 'carregando' });
+    const r = await buscarPerto({ lat: g.pos.lat, lon: g.pos.lon, uf: g.uf, cidade: g.cidade });
+    setPos(g.pos);
+    setPertoDeVoce(true);
+    if (r.ok && r.dados.farmacias.length > 0 && r.dados.cobertura.lida !== false) {
+      setPonto({ rotulo: 'Sua localização', aproximado: false });
+      setEstado({ fase: 'pronto', lista: listaDoPonto(r.dados) });
+      if (r.dados.cobertura.uf && r.dados.cobertura.cidade) setLocal({ uf: r.dados.cobertura.uf, cidade: r.dados.cobertura.cidade });
+      return;
+    }
+    setPonto(null);
+    if (g.uf && g.cidade) await carregar({ uf: g.uf, cidade: g.cidade });
+    else await carregar();
   }, [carregar]);
+
+  // Abre onde a pessoa ESTÁ. Sem permissão ou sem GPS: cidade do cadastro, como antes.
+  const usarLocalizacao = useCallback(async () => {
+    const l = await pegarLocalizacao();
+    if (l.tipo === 'ok') {
+      setSemPermissao(false);
+      const g = { pos: l.pos, uf: l.uf, cidade: l.cidade };
+      setGps(g);
+      await porPonto(g);
+      return;
+    }
+    if (l.tipo === 'negada') setSemPermissao(true);
+    setPonto(null);
+    await carregar();
+  }, [carregar, porPonto]);
+
+  useEffect(() => {
+    void usarLocalizacao();
+  }, [usarLocalizacao]);
+
+  async function buscarPorCep() {
+    const d = cep.replace(/\D/g, '');
+    if (d.length !== 8) {
+      setCepErro('Digite os 8 números do CEP.');
+      return;
+    }
+    setCepErro(null);
+    limparFiltros();
+    setEstado({ fase: 'carregando' });
+    const r = await buscarPerto({ cep: d });
+    if (!r.ok) {
+      if (r.cepInvalido) setCepErro('Não achamos esse CEP. Confira os números.');
+      else setEstado({ fase: 'erro', mensagem: r.mensagem });
+      if (r.cepInvalido) setEstado(lista ? { fase: 'pronto', lista } : { fase: 'sem_cidade' });
+      return;
+    }
+    const c = r.dados.centro;
+    setPos({ lat: c.lat, lon: c.lon });
+    setPertoDeVoce(false);
+    setPonto({ rotulo: c.rotulo || `CEP ${mascararCep(d)}`, aproximado: c.aproximado });
+    if (r.dados.farmacias.length > 0 && r.dados.cobertura.lida !== false) {
+      setEstado({ fase: 'pronto', lista: listaDoPonto(r.dados) });
+      if (r.dados.cobertura.uf && r.dados.cobertura.cidade) setLocal({ uf: r.dados.cobertura.uf, cidade: r.dados.cobertura.cidade });
+      return;
+    }
+    // Cidade do CEP ainda fora da base: lista da cidade, ordenada a partir do CEP.
+    if (r.dados.cobertura.uf && r.dados.cobertura.cidade) {
+      await carregar({ uf: r.dados.cobertura.uf, cidade: r.dados.cobertura.cidade });
+    } else {
+      setEstado({ fase: 'pronto', lista: listaDoPonto(r.dados) });
+    }
+  }
 
   // Coordenadas ainda chegando no erp: pergunta de novo, sem esqueleto e sem mexer nos filtros.
   const pendentes = estado.fase === 'pronto' ? estado.lista.geocode_pendente : 0;
@@ -169,10 +251,12 @@ export default function Farmacias() {
   function escolherCidade(uf: string, cidade: string) {
     setEscolhendo(false);
     setPertoDeVoce(false);
-    repeticoes.current = 0;
-    setBusca('');
-    setRede(TODAS);
-    setSo24h(false);
+    setPonto(null);
+    setCep('');
+    setCepErro(null);
+    // Distância volta a ser a partir de onde a pessoa está (não do CEP buscado antes).
+    setPos(gps?.pos ?? null);
+    limparFiltros();
     void carregar({ uf, cidade });
   }
 
@@ -183,15 +267,41 @@ export default function Farmacias() {
       <View style={s.localLinha}>
         <Ionicons name="location" size={18} color={color.greenDeep} />
         <View style={s.localTexto}>
-          {pertoDeVoce ? <Text style={s.localRotulo}>PERTO DE VOCÊ</Text> : null}
+          {ponto ? (
+            <Text style={s.localRotulo}>{pertoDeVoce ? 'PERTO DE VOCÊ' : ponto.aproximado ? 'PERTO DO CEP (APROXIMADO)' : 'PERTO DO CEP'}</Text>
+          ) : pertoDeVoce ? <Text style={s.localRotulo}>PERTO DE VOCÊ</Text> : null}
           <Text style={s.localTxt} numberOfLines={1}>
-            {local ? `${local.cidade} · ${local.uf}` : 'Escolha a cidade'}
+            {ponto && !pertoDeVoce ? ponto.rotulo : local ? `${local.cidade} · ${local.uf}` : 'Escolha a cidade'}
           </Text>
         </View>
         <Pressable onPress={() => setEscolhendo(true)} style={s.trocar} hitSlop={8}>
           <Text style={s.trocarTxt}>Trocar cidade</Text>
         </Pressable>
       </View>
+
+      <View style={s.cepLinha}>
+        <View style={[s.busca, s.cepCampo, cepErro ? s.cepCampoErro : null]}>
+          <Ionicons name="pin-outline" size={18} color={color.ink3} />
+          <TextInput
+            value={cep}
+            onChangeText={(t) => { setCep(mascararCep(t)); setCepErro(null); }}
+            placeholder="Buscar perto de um CEP"
+            placeholderTextColor={color.ink3}
+            style={s.buscaInput}
+            keyboardType="number-pad"
+            maxLength={9}
+            returnKeyType="search"
+            onSubmitEditing={() => void buscarPorCep()}
+          />
+        </View>
+        <Pressable onPress={() => void buscarPorCep()} style={s.cepBotao} hitSlop={6}>
+          <Ionicons name="search" size={18} color={color.white} />
+        </Pressable>
+        <Pressable onPress={() => { setCep(''); setCepErro(null); limparFiltros(); void usarLocalizacao(); }} style={s.gpsBotao} hitSlop={6}>
+          <Ionicons name="locate" size={18} color={color.navy} />
+        </Pressable>
+      </View>
+      {cepErro ? <Text style={s.cepErro}>{cepErro}</Text> : null}
 
       {semPermissao ? (
         <Pressable onPress={() => void Linking.openSettings()} style={s.avisoLocal}>
@@ -243,6 +353,7 @@ export default function Farmacias() {
 
           <Text style={s.contagem}>
             {visiveis.length === 1 ? '1 farmácia conveniada' : `${visiveis.length} farmácias conveniadas`}
+            {ponto ? ' num raio de até 30 km' : ''}
             {pos && !calculandoDistancia && lista.farmacias.length > 0 ? ' · mais perto primeiro' : ''}
             {calculandoDistancia ? ' · calculando distâncias…' : ''}
             {lista.desatualizado ? ' · lista pode estar desatualizada' : ''}
@@ -308,8 +419,8 @@ export default function Farmacias() {
             estado.lista.farmacias.length === 0 ? (
               <Vazio
                 icone="medkit-outline"
-                titulo={`Ainda não há farmácia conveniada em ${estado.lista.cidade}`}
-                texto="Tente uma cidade vizinha."
+                titulo={ponto ? 'Nenhuma farmácia conveniada por perto' : `Ainda não há farmácia conveniada em ${estado.lista.cidade}`}
+                texto={ponto ? 'Não achamos farmácia num raio de 30 km. Tente outra cidade.' : 'Tente uma cidade vizinha.'}
                 acao={{ rotulo: 'Trocar cidade', onPress: () => setEscolhendo(true) }}
               />
             ) : (
@@ -611,6 +722,12 @@ const s = StyleSheet.create({
     marginBottom: space.md,
   },
   avisoLocalTxt: { flex: 1, fontFamily: font.medium, fontSize: size.sm, color: color.ink },
+  cepLinha: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginBottom: space.md },
+  cepCampo: { flex: 1, marginBottom: 0 },
+  cepCampoErro: { borderColor: color.danger },
+  cepBotao: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: color.navy, alignItems: 'center', justifyContent: 'center' },
+  gpsBotao: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: color.greenBg, alignItems: 'center', justifyContent: 'center' },
+  cepErro: { fontFamily: font.regular, fontSize: size.sm, color: color.danger, marginTop: -space.sm, marginBottom: space.md },
   trocar: { backgroundColor: color.greenBg, borderRadius: radius.pill, paddingVertical: space.xs, paddingHorizontal: space.md },
   trocarTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.greenDeep },
 

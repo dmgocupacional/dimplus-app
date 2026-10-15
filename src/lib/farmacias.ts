@@ -56,6 +56,38 @@ export async function buscarCidades(uf: string): Promise<{ ok: true; cidades: st
   return r.ok ? { ok: true, cidades: r.dados.cidades } : { ok: false, mensagem: r.mensagem };
 }
 
+// 15/10/2026 — busca por PONTO (GPS ou CEP) na base própria do erp, atravessando cidades.
+// `cobertura.lida === false`: a cidade do ponto ainda não entrou na base → a tela usa a rota
+// por cidade (leitura ao vivo). → erp: src/app/api/app/farmacias/perto/route.ts
+export type ResultadoPerto = {
+  centro: { lat: number; lon: number; rotulo: string; aproximado: boolean };
+  raio_km: number;
+  farmacias: Farmacia[];
+  cobertura: { uf: string | null; cidade: string | null; lida: boolean | null };
+};
+
+export async function buscarPerto(
+  alvo: { cep: string } | { lat: number; lon: number; uf?: string | null; cidade?: string | null },
+): Promise<{ ok: true; dados: ResultadoPerto } | { ok: false; cepInvalido: boolean; mensagem: string }> {
+  const p = new URLSearchParams();
+  if ('cep' in alvo) p.set('cep', alvo.cep.replace(/\D/g, ''));
+  else {
+    p.set('lat', String(alvo.lat));
+    p.set('lon', String(alvo.lon));
+    if (alvo.uf) p.set('uf', alvo.uf);
+    if (alvo.cidade) p.set('cidade', alvo.cidade);
+  }
+  const r = await chamarFeegow<ResultadoPerto>(`/api/app/farmacias/perto?${p.toString()}`);
+  if (r.ok) return { ok: true, dados: r.dados };
+  return { ok: false, cepInvalido: r.status === 400 || r.status === 404, mensagem: r.mensagem };
+}
+
+/** "06120000" → "06120-000" enquanto digita. */
+export function mascararCep(s: string): string {
+  const d = s.replace(/\D/g, '').slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
 /** Comparação sem acento e sem caixa, para a busca da tela. */
 export function normalizar(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
