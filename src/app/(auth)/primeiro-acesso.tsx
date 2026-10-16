@@ -31,7 +31,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Campo } from '@/components/Campo';
-import { buscarTermoVigente, cpfValido, emailValido, pedirPrimeiroAcesso } from '@/lib/auth';
+import { buscarTermoVigente, consultarSituacaoCpf, cpfValido, emailValido, pedirPrimeiroAcesso } from '@/lib/auth';
 import { dataParaISO, mascaraCPF, mascaraData, mascaraTelefone } from '@/lib/format';
 import { color, font, radius, size, space } from '@/theme/tokens';
 
@@ -86,6 +86,36 @@ export default function PrimeiroAcesso() {
     };
   }, []);
 
+  // 16/10/2026 — o termo segue a NATUREZA do plano de quem digitou o CPF. Antes todo mundo lia o
+  // de consumidor; colaborador DIMEG e funcionário de empresa parceira ficavam com o aceite do
+  // termo errado. Consulta a triagem uma vez por CPF válido; troca o termo e desmarca o aceite.
+  const [naturezaCpf, setNaturezaCpf] = useState<{ cpf: string; natureza: string | null } | null>(null);
+  useEffect(() => {
+    const digitos = cpf.replace(/\D/g, '');
+    if (!cpfValido(cpf) || naturezaCpf?.cpf === digitos) return;
+    let vivo = true;
+    void (async () => {
+      const sit = await consultarSituacaoCpf(digitos, 'primeiro_acesso');
+      if (!vivo) return;
+      const natureza = sit.ok && sit.situacao === 'sem_conta' ? sit.natureza : null;
+      setNaturezaCpf({ cpf: digitos, natureza });
+      const r = await buscarTermoVigente(natureza);
+      if (!vivo) return;
+      if (r.ok) {
+        setTermo((atual) => {
+          if (atual?.id !== r.id) {
+            setAceite(false);
+            setTermoAberto(false);
+          }
+          return { id: r.id, versao: r.versao, texto: r.texto };
+        });
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [cpf, naturezaCpf]);
+
   // 🔴 TODOS obrigatórios. Diferente da recuperação, aqui não existe canal cadastrado a provar:
   // nascimento e telefone são a única barreira entre um CPF conhecido — e CPF não é segredo no
   // Brasil — e uma conta criada no nome de outra pessoa.
@@ -96,6 +126,7 @@ export default function PrimeiroAcesso() {
     telefone.replace(/\D/g, '').length >= 10 &&
     aceite &&
     !!termo &&
+    naturezaCpf?.cpf === cpf.replace(/\D/g, '') &&
     !enviando;
 
   async function enviar() {

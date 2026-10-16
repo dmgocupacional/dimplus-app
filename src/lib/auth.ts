@@ -284,12 +284,17 @@ export async function pedirPrimeiroAcesso(dados: {
   }
 }
 
-/** Termo vigente da natureza `consumidor`, para a tela de primeiro acesso exibir e coletar aceite. */
-export async function buscarTermoVigente(): Promise<
+/**
+ * Termo vigente para a tela de primeiro acesso exibir e coletar aceite.
+ * 16/10/2026 — `natureza` (vinda da triagem do CPF) troca o termo: colaborador DIMEG lê o termo
+ * de funcionário, empresa parceira o empresarial. Sem ela, o de consumidor (como antes).
+ */
+export async function buscarTermoVigente(natureza?: string | null): Promise<
   { ok: true; id: string; versao: string; texto: string } | { ok: false; erro: string }
 > {
   try {
-    const resp = await fetch(`${API_BASE}/api/public/app-termo-cadastro`);
+    const qs = natureza && natureza !== 'consumidor' ? `?natureza=${encodeURIComponent(natureza)}` : '';
+    const resp = await fetch(`${API_BASE}/api/public/app-termo-cadastro${qs}`);
     const json = (await resp.json()) as {
       termo?: { id: string; versao: string; texto: string };
       error?: string;
@@ -316,7 +321,7 @@ export type SituacaoCpf =
   | { ok: true; situacao: 'sem_email' }
   // 14/09/2026 — cliente que NUNCA criou conta. São 334 ativos. O caminho deles não é
   // recuperar senha (não há o que recuperar), é a tela de primeiro acesso.
-  | { ok: true; situacao: 'sem_conta'; ativo: boolean }
+  | { ok: true; situacao: 'sem_conta'; ativo: boolean; natureza: string | null }
   // 15/09/2026 — plano não ativo. Terminal: a saída é falar com a equipe, não corrigir campo.
   | { ok: true; situacao: 'bloqueado'; status: string; tentativaId: string | null }
   // 15/09/2026 — cliente sem plano. Terminal: sem plano não dá para saber qual termo se
@@ -344,6 +349,7 @@ export async function consultarSituacaoCpf(
       ativo?: boolean;
       status?: string;
       tentativa_id?: string;
+      natureza?: string | null;
       error?: string;
     };
     if (!resp.ok || !json.situacao) {
@@ -364,7 +370,7 @@ export async function consultarSituacaoCpf(
       };
     }
     if (json.situacao === 'sem_conta') {
-      return { ok: true, situacao: 'sem_conta', ativo: json.ativo === true };
+      return { ok: true, situacao: 'sem_conta', ativo: json.ativo === true, natureza: json.natureza ?? null };
     }
     return { ok: true, situacao: json.situacao };
   } catch {
