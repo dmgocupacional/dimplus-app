@@ -36,3 +36,10 @@ com as medições ao vivo, está em `erp-dimplus/docs/sessions/2026-10-21-agenda
 - Telefone do WhatsApp segue duplicado (agora também em `feegowApi.ts`) — vale uma fonte única.
 - A cobertura não é recalculada se o cliente fica muito tempo na confirmação; o erp recalcula na
   criação, e o aviso de sucesso mostra o que valeu.
+
+### 🔴 Pegadinha (custou um OTA falho)
+- `npx expo lint` sem eslint instalado INSTALA `eslint` + `eslint-config-expo` e os escreve no
+  `package.json` (e cria `eslint.config.js`). Isso entrou no commit d0f9965 sem lockfile e o
+  `npm ci` do workflow `Publicar no Expo Go` quebrou ("Missing … from lock file"). Revertido no commit
+  seguinte. Para validar lint aqui: não rodar `expo lint` solto, ou descartar `package.json`/lock/config
+  antes do `git add`.
