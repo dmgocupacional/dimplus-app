@@ -349,6 +349,9 @@ function normalizarMeuAgendamento(item: unknown): MeuAgendamento | null {
     // `especialidade_id` vem em todo agendamento de `appoints/search` (confirmado ao
     // vivo), mesmo sem nome junto — é a fonte certa pra cruzar com o catálogo.
     especialidadeId: paraNumero(o.especialidade_id ?? o.EspecialidadeID),
+    unidadeNome: extrairTexto(o, ['nome_fantasia', 'unidade_nome']),
+    unidadeId: paraNumero(o.unidade_id),
+    notas: extrairTexto(o, ['notas', 'Notas']),
   };
 }
 
@@ -510,6 +513,63 @@ export function podeAgendarCriacao(catalogo: CatalogoProcedimentos, especialidad
   return catalogo.consultaPorEspecialidade.has(especialidadeId);
 }
 
+// ─── Cobertura: inclusa no plano × pagar na recepção (21/10/2026) ────────────
+//
+// Agendamento pelo app é PRÉ-AGENDAMENTO (decisão do Henrique): quem não tem consulta inclusa
+// paga na recepção, no dia. O erp decide (`fn_beneficio_categoria` + `fn_beneficios_saldo`);
+// aqui só se mostra. Na criação o erp RECALCULA e devolve a cobertura que valeu.
+
+export type Cobertura = {
+  inclusa: boolean;
+  categoriaNome: string | null;
+  /** null = ilimitado ou não se aplica. */
+  restantes: number | null;
+  /** Preço na tabela DIM+, em centavos. null = não deu para ler agora. */
+  valorCentavos: number | null;
+};
+
+function normalizarCobertura(cru: unknown): Cobertura | null {
+  if (!cru || typeof cru !== 'object') return null;
+  const o = cru as Record<string, unknown>;
+  if (typeof o.inclusa !== 'boolean') return null;
+  return {
+    inclusa: o.inclusa,
+    categoriaNome: paraTexto(o.categoria_nome),
+    restantes: paraNumero(o.restantes),
+    valorCentavos: paraNumero(o.valor_centavos),
+  };
+}
+
+export async function getCobertura(procedimentoId: number): Promise<FeegowResultado<Cobertura>> {
+  const r = await chamarFeegow<unknown>(
+    `/api/feegow/agendamento/cobertura?procedimento_id=${encodeURIComponent(String(procedimentoId))}`
+  );
+  if (!r.ok) return r;
+  const c = normalizarCobertura(r.dados);
+  if (!c) return { ok: false, tipo: 'erro_servidor', mensagem: 'Resposta inesperada do servidor.' };
+  return { ok: true, dados: c };
+}
+
+export function formatarReais(centavos: number): string {
+  return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/** Texto do que o cliente vai pagar — o mesmo na confirmação e no aviso de sucesso. */
+export function textoCobertura(c: Cobertura | null): string {
+  if (c?.inclusa) {
+    const saldo = c.restantes !== null ? ` (restam ${c.restantes})` : '';
+    return `Consulta inclusa no seu plano${saldo}. Nada a pagar na recepção.`;
+  }
+  const valor = c?.valorCentavos != null ? ` de ${formatarReais(c.valorCentavos)}` : '';
+  return `Pagamento${valor} (valor DIM+) feito na recepção, no dia, antes do atendimento.`;
+}
+
+/** Agendamento que nasceu no app (nota gravada pelo erp desde v0.258/v0.467). */
+export function veioDoApp(a: MeuAgendamento): boolean {
+  const n = (a.notas ?? '').toLowerCase();
+  return n.includes('pré-agendamento app') || n.includes('app dim+');
+}
+
 export async function criarAgendamento(a: {
   localId: number;
   profissionalId: number;
@@ -517,8 +577,8 @@ export async function criarAgendamento(a: {
   procedimentoId: number;
   data: string; // AAAA-MM-DD
   horario: string; // HH:MM ou HH:MM:SS
-}): Promise<FeegowResultado<{ ok: true }>> {
-  const r = await chamarFeegow<{ ok: boolean }>('/api/feegow/agendamento', {
+}): Promise<FeegowResultado<{ ok: true; cobertura: Cobertura | null }>> {
+  const r = await chamarFeegow<{ ok: boolean; cobertura?: unknown }>('/api/feegow/agendamento', {
     method: 'POST',
     body: {
       local_id: a.localId,
@@ -530,6 +590,6 @@ export async function criarAgendamento(a: {
     },
   });
   if (!r.ok) return r;
-  return { ok: true, dados: { ok: true } };
+  return { ok: true, dados: { ok: true, cobertura: normalizarCobertura(r.dados.cobertura) } };
 }
 // ── FIM BLOCO ──

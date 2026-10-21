@@ -34,6 +34,7 @@ import {
   hojeIsoLocal,
   reagendarAgendamento,
   separarPorData,
+  veioDoApp,
   type Opcoes,
 } from '@/lib/agendamento';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
@@ -60,6 +61,8 @@ function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
       return 'Não encontramos seu cadastro na clínica ainda. Fale com a central de atendimento para regularizar.';
     case 'modulo_desativado':
       return 'Este serviço estará disponível em breve.';
+    case 'pagamento_pendente':
+      return mensagemServidor;
     case 'nao_autenticado':
     case 'sem_sessao':
       return 'Sua sessão expirou. Saia e entre novamente para continuar.';
@@ -211,7 +214,12 @@ export default function MeusAgendamentos() {
       setRemarcacao({ fase: 'erro', agendamento: a, tipo: rDisp.tipo, mensagem: rDisp.mensagem });
       return;
     }
-    setRemarcacao({ fase: 'escolher_dia', agendamento: a, slots: rDisp.dados.slots });
+    // 21/10/2026 — remarca na MESMA unidade: o médico atende em várias cidades e a lista
+    // misturada levava o cliente para outra cidade sem aviso. Sem unidade conhecida no
+    // agendamento (registro antigo), mostra tudo em vez de esconder.
+    const naMesmaUnidade =
+      a.unidadeId !== null ? rDisp.dados.slots.filter((sl) => sl.unidadeId === a.unidadeId) : rDisp.dados.slots;
+    setRemarcacao({ fase: 'escolher_dia', agendamento: a, slots: naMesmaUnidade });
   }
 
   function confirmarRemarcacao(
@@ -367,6 +375,7 @@ export default function MeusAgendamentos() {
                     {a.data ? ` · ${formatData(a.data)}` : ''}
                     {a.horario ? ` às ${a.horario.slice(0, 5)}` : ''}
                   </Text>
+                  {a.unidadeNome ? <Text style={s.unidadeLinha}>📍 {a.unidadeNome}</Text> : null}
                 </View>
                 {status ? <Pill texto={status.texto} tom={status.tom} /> : null}
               </View>
@@ -391,7 +400,17 @@ export default function MeusAgendamentos() {
                     </Text>
                   </View>
                 );
-              })() : null}
+              })() : mostrarAcoes ? (
+                // 21/10/2026 (Henrique): sem consulta inclusa, é pré-agendamento — o paciente
+                // AINDA NÃO PAGOU e paga na recepção. Deixar isso explícito evita o ruído de
+                // quem chegava achando que já estava pago.
+                <View style={s.pendente}>
+                  <Text style={s.inclusaTitulo}>
+                    {veioDoApp(a) ? 'Pré-agendado pelo app · pagamento pendente' : 'Pagamento pendente'}
+                  </Text>
+                  <Text style={s.inclusaSub}>Pague na recepção, no dia, antes do atendimento (valor DIM+).</Text>
+                </View>
+              ) : null}
 
               {mostrarAcoes ? (
                 <View style={s.acoes}>
@@ -479,6 +498,16 @@ const s = StyleSheet.create({
     gap: 2,
   },
   inclusaTarde: { borderLeftColor: color.danger },
+  pendente: {
+    marginTop: space.md,
+    backgroundColor: color.offwhite,
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: color.navy,
+    padding: space.md,
+    gap: 2,
+  },
+  unidadeLinha: { fontFamily: font.medium, fontSize: size.xs, color: color.navy600, marginTop: 2 },
   inclusaTitulo: { fontFamily: font.bold, fontSize: size.sm, color: color.ink },
   inclusaSub: { fontFamily: font.regular, fontSize: size.xs, color: color.ink2 },
   inclusaPrazo: { fontFamily: font.bold, fontSize: size.xs, color: color.navy, marginTop: 4 },

@@ -41,7 +41,10 @@ export type FeegowErroTipo =
   | 'erro_servidor'
   | 'rede'
   /** 29/09/2026 — conta de demonstração: o ERP recusou uma escrita. `mensagem` vem pronta. */
-  | 'demonstracao';
+  | 'demonstracao'
+  /** 21/10/2026 — 403 com motivo `pagamento_pendente` (erp v0.467.0). Antes caía em
+   *  `modulo_desativado` e o app dizia "disponível em breve" ao inadimplente. */
+  | 'pagamento_pendente';
 
 export type FeegowResultado<T> =
   | { ok: true; dados: T }
@@ -63,6 +66,11 @@ function tipoPorStatus(status: number): FeegowErroTipo {
   if (status === 502) return 'indisponivel';
   return 'erro_servidor';
 }
+
+/** Curta e sem aspas/chaves de propósito: as telas só exibem texto do servidor que passe nesse
+ *  filtro (ver `mensagemErro` em cada tela). */
+export const MENSAGEM_PAGAMENTO_PENDENTE =
+  'Seu plano está com pagamento pendente. Regularize pelo WhatsApp (11) 99519-3094 para agendar.';
 
 type Opcoes = {
   method?: 'GET' | 'POST';
@@ -114,8 +122,11 @@ export async function chamarFeegow<T>(path: string, opcoes: Opcoes = {}): Promis
     let mensagem = 'Não foi possível completar a operação.';
     let corpo: unknown;
     try {
-      const json = (await resp.json()) as { error?: string; mensagem?: string };
+      const json = (await resp.json()) as { error?: string; mensagem?: string; motivo?: string };
       corpo = json;
+      if (resp.status === 403 && json.motivo === 'pagamento_pendente') {
+        return { ok: false, tipo: 'pagamento_pendente', mensagem: MENSAGEM_PAGAMENTO_PENDENTE, status: 403, corpo };
+      }
       if (json.error === 'demonstracao') {
         return { ok: false, tipo: 'demonstracao', mensagem: json.mensagem ?? 'Esta é uma demonstração: aqui nada é marcado nem enviado.', status: resp.status, corpo };
       }

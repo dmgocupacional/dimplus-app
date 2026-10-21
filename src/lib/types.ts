@@ -280,6 +280,12 @@ export type MeuAgendamento = {
    *  uma especialidade; NUNCA usar a primeira especialidade do profissional como
    *  substituto — foi o bug (Cardiologia exibida numa consulta de Geriatria). */
   especialidadeId: number | null;
+  /** 21/10/2026 — onde é a consulta (`nome_fantasia` da Feegow). Médico atende em mais de
+   *  uma cidade: sem isto o cliente não sabia em qual unidade ficou marcado. */
+  unidadeNome: string | null;
+  unidadeId: number | null;
+  /** Nota da agenda. Agendamento feito pelo app começa com "PRÉ-AGENDAMENTO APP DIM+". */
+  notas: string | null;
 };
 
 /**

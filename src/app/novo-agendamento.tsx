@@ -25,10 +25,13 @@ import { CalendarioMes } from '@/components/CalendarioMes';
 import { Aviso, Card, Screen, Titulo } from '@/components/ui';
 import {
   criarAgendamento,
+  getCobertura,
   getDisponibilidade,
   getOpcoes,
   getProcedimentos,
   podeAgendarCriacao,
+  textoCobertura,
+  type Cobertura,
   type Opcoes,
 } from '@/lib/agendamento';
 import type { FeegowErroTipo } from '@/lib/feegowApi';
@@ -85,6 +88,8 @@ function mensagemErro(tipo: FeegowErroTipo, mensagemServidor: string): string {
       return 'Não encontramos seu cadastro na clínica ainda. Fale com a central de atendimento para regularizar.';
     case 'modulo_desativado':
       return 'Este serviço estará disponível em breve.';
+    case 'pagamento_pendente':
+      return mensagemServidor;
     case 'nao_autenticado':
     case 'sem_sessao':
       return 'Sua sessão expirou. Saia e entre novamente para continuar.';
@@ -114,7 +119,11 @@ type GrupoProfissional = {
   profissionalId: number;
   nome: string;
   tratamento: string | null;
+  /** 21/10/2026 — o grupo é MÉDICO + UNIDADE. O mesmo médico atende em mais de uma cidade
+   *  (prof 44: Osasco, Itapevi e Carapicuíba); agrupar só por médico punha todas as datas
+   *  debaixo da unidade do primeiro horário e o cliente marcava na cidade errada sem saber. */
   unidadeId: number;
+  unidadeNome: string;
   faixaLabel: string | null;
   datas: string[]; // ordenadas, únicas
 };
@@ -198,7 +207,8 @@ export default function Agendar() {
     });
     if (!r.ok) return null;
     return r.dados.slots
-      .filter((sl) => sl.profissionalId === grupo.profissionalId)
+      // Só a unidade escolhida — ver `GrupoProfissional.unidadeId`.
+      .filter((sl) => sl.profissionalId === grupo.profissionalId && sl.unidadeId === grupo.unidadeId)
       .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
   }
 
@@ -227,14 +237,18 @@ export default function Agendar() {
     // seguro pelo `podeAgendarCriacao` acima: a chave existe no mapa.
     const procedimentoId = r.dados.consultaPorEspecialidade.get(especialidade.id)!;
     const nomeProf = grupo.tratamento ? `${grupo.tratamento} ${grupo.nome}` : grupo.nome;
+    // Cobertura é INFORMATIVA aqui (o erp recalcula na criação). Se falhar, a confirmação
+    // diz "pagamento na recepção" — o lado seguro: nunca prometer gratuidade sem confirmar.
+    const cob = await getCobertura(procedimentoId);
+    const cobertura: Cobertura | null = cob.ok ? cob.dados : null;
     setCriacao({ fase: 'escolher_hora', especialidade, grupo, slots, dia: slot.data });
     Alert.alert(
-      'Confirmar agendamento?',
-      `${especialidade.nome} com ${nomeProf}\n${formatData(slot.data)} às ${slot.horario.slice(0, 5)}`,
+      'Confirmar pré-agendamento?',
+      `${especialidade.nome} com ${nomeProf}\n${formatData(slot.data)} às ${slot.horario.slice(0, 5)}\n📍 ${grupo.unidadeNome}\n\n${textoCobertura(cobertura)}`,
       [
         { text: 'Voltar', style: 'cancel' },
         {
-          text: 'Confirmar',
+          text: 'Pré-agendar',
           onPress: () => executarCriacao(grupo, slot, procedimentoId, especialidade, slots),
         },
       ]
@@ -271,6 +285,10 @@ export default function Agendar() {
       return;
     }
     setCriacao(null);
+    Alert.alert(
+      'Pré-agendamento feito',
+      `${formatData(slot.data)} às ${slot.horario.slice(0, 5)} · ${grupo.unidadeNome}\n\n${textoCobertura(r.dados.cobertura)}`
+    );
     // `replace`, não `push`: com push o fluxo de marcação ficava na pilha e o "voltar"
     // da lista devolvia o cliente para a tela de escolher horário do agendamento que
     // ele acabou de criar.
@@ -334,6 +352,7 @@ export default function Agendar() {
                   ? `${criacao.grupo.tratamento} ${criacao.grupo.nome}`
                   : criacao.grupo.nome}
               </Text>
+              <Text style={s.unidadeLinha}>📍 {criacao.grupo.unidadeNome}</Text>
               <Text style={s.profSub}>Toque em um dia com vaga.</Text>
               <CalendarioMes
                 diasComVaga={[...new Set(criacao.slots.map((sl) => sl.data))]}
@@ -352,6 +371,7 @@ export default function Agendar() {
         ) : criacao.fase === 'escolher_hora' ? (
           <>
             <Text style={s.diaEscolhido}>{formatData(criacao.dia)}</Text>
+            <Text style={s.unidadeLinha}>📍 {criacao.grupo.unidadeNome}</Text>
             <View style={s.gradeHoras}>
               {horasDoDia.map((slot, i) => (
                 <Pressable
@@ -405,6 +425,11 @@ export default function Agendar() {
 
     return (
       <Screen titulo="Novo agendamento">
+        <Aviso
+          tom="info"
+          icone="information-circle"
+          texto="Pelo app você faz um pré-agendamento. Consultas inclusas no seu plano não são cobradas; as demais são pagas na recepção, no dia, com o valor DIM+."
+        />
         <Titulo>Escolha a especialidade</Titulo>
 
         {/* Busca sempre disponível: com a grade de blocos, 31 especialidades dão ~16
@@ -506,7 +531,7 @@ export default function Agendar() {
   //    com `especialidadeIds` que o `opcoes` já devolve por profissional.
   //    Sem isto a tela oferece médico que não atende a especialidade escolhida — e a
   //    Feegow recusa a criação só na confirmação, depois do cliente escolher horário.
-  const gruposPorProfissional = new Map<number, GrupoProfissional>();
+  const gruposPorProfissional = new Map<string, GrupoProfissional>();
   for (const slot of slots) {
     const prof = profissionaisPorId.get(slot.profissionalId);
     if (!prof) continue; // profissional não veio no catálogo — não inventa nome
@@ -520,15 +545,17 @@ export default function Agendar() {
     const veredito = atendeFaixa(idadeNaData, prof.faixa);
     if (veredito === false) continue; // não atende essa idade — esconde de verdade
 
-    const existente = gruposPorProfissional.get(prof.id);
+    const chave = `${prof.id}|${slot.unidadeId}`;
+    const existente = gruposPorProfissional.get(chave);
     if (existente) {
       if (!existente.datas.includes(slot.data)) existente.datas.push(slot.data);
     } else {
-      gruposPorProfissional.set(prof.id, {
+      gruposPorProfissional.set(chave, {
         profissionalId: prof.id,
         nome: prof.nome,
         tratamento: prof.tratamento,
         unidadeId: slot.unidadeId,
+        unidadeNome: unidadesPorId.get(slot.unidadeId)?.nomeFantasia ?? 'Unidade',
         faixaLabel: rotuloFaixa(prof.faixa),
         datas: [slot.data],
       });
@@ -568,7 +595,7 @@ export default function Agendar() {
             <View key={unidadeId}>
               <Titulo>{unidade?.nomeFantasia ?? 'Unidade'}</Titulo>
               {grupos.map((g) => (
-                <Pressable key={g.profissionalId} onPress={() => iniciarCriacao(especialidade, g)}>
+                <Pressable key={`${g.profissionalId}|${g.unidadeId}`} onPress={() => iniciarCriacao(especialidade, g)}>
                   <Card style={s.linhaProf}>
                     <View style={s.linhaIcon}>
                       <Ionicons name="person" size={18} color={color.navy} />
@@ -664,6 +691,7 @@ const s = StyleSheet.create({
   voltarTxt: { fontFamily: font.bold, fontSize: size.sm, color: color.navy },
   profTitulo: { fontFamily: font.bold, fontSize: size.base, color: color.ink },
   profSub: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: 2, marginBottom: space.lg },
+  unidadeLinha: { fontFamily: font.bold, fontSize: size.sm, color: color.navy, marginBottom: space.sm },
   diaEscolhido: {
     fontFamily: font.bold,
     fontSize: size.base,

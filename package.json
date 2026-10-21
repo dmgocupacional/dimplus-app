@@ -1,7 +1,7 @@
 {
   "name": "dimplus-app",
   "main": "expo-router/entry",
-  "version": "4.40.0",
+  "version": "4.41.0",
   "dependencies": {
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
@@ -33,6 +33,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
