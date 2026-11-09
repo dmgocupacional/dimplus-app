@@ -68,7 +68,7 @@ export default function PrimeiroAcesso() {
   // não está ativo" exigem outra tela ou a nossa equipe, e uma linha de texto embaixo do botão
   // faz ela tentar de novo à toa.
   const [bloqueio, setBloqueio] = useState<{ motivo: string; texto: string } | null>(null);
-  const TERMINAIS = ['ja_tem_conta', 'nao_ativo', 'sem_dados_cadastrados'];
+  const TERMINAIS = ['ja_tem_conta', 'nao_ativo', 'sem_dados_cadastrados', 'nao_cliente'];
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   // O termo é buscado na abertura da tela, não no envio: descobrir que ele não carregou só
@@ -86,39 +86,72 @@ export default function PrimeiroAcesso() {
     };
   }, []);
 
-  // 16/10/2026 — o termo segue a NATUREZA do plano de quem digitou o CPF. Antes todo mundo lia o
-  // de consumidor; colaborador DIMEG e funcionário de empresa parceira ficavam com o aceite do
-  // termo errado. Consulta a triagem uma vez por CPF válido; troca o termo e desmarca o aceite.
-  const [naturezaCpf, setNaturezaCpf] = useState<{ cpf: string; natureza: string | null } | null>(null);
-  // 09/11/2026 — dica do e-mail cadastrado, vinda da mesma triagem. Só vale para o CPF atual.
-  const [mascaraEmail, setMascaraEmail] = useState<{ cpf: string; mascara: string } | null>(null);
-  useEffect(() => {
-    const digitos = cpf.replace(/\D/g, '');
-    if (!cpfValido(cpf) || naturezaCpf?.cpf === digitos) return;
-    let vivo = true;
-    void (async () => {
-      const sit = await consultarSituacaoCpf(digitos, 'primeiro_acesso');
-      if (!vivo) return;
-      const natureza = sit.ok && sit.situacao === 'sem_conta' ? sit.natureza : null;
-      setNaturezaCpf({ cpf: digitos, natureza });
-      const mascara = sit.ok && sit.situacao === 'sem_conta' ? sit.mascara : null;
-      setMascaraEmail(mascara ? { cpf: digitos, mascara } : null);
-      const r = await buscarTermoVigente(natureza);
-      if (!vivo) return;
+  // 09/11/2026 — CPF PRIMEIRO (pedido de 02/10/2026). A tela abre só com o CPF; a triagem
+  // decide o que falta. Antes a lista inteira aparecia de cara e a triagem rodava escondida só
+  // para trocar o termo — quem já tinha conta, estava bloqueado ou nem era cliente preenchia
+  // tudo para descobrir no fim. Agora cada desfecho tem a sua saída já na primeira etapa.
+  // → BLOCO: API PUBLIC — TRIAGEM DE CPF (erp-dimplus, app-recuperar/consultar)
+  const [etapa, setEtapa] = useState<'cpf' | 'dados'>('cpf');
+  const [consultando, setConsultando] = useState(false);
+  // Dica do e-mail cadastrado (ex.: ****ntas@dimeg.com.br): a Porta 4 exige que o digitado bata.
+  const [mascaraEmail, setMascaraEmail] = useState<string | null>(null);
+
+  async function continuar() {
+    if (!cpfValido(cpf) || consultando) return;
+    setConsultando(true);
+    setErro(null);
+    const sit = await consultarSituacaoCpf(cpf.replace(/\D/g, ''), 'primeiro_acesso');
+    if (!sit.ok) {
+      setConsultando(false);
+      setErro(sit.erro);
+      return;
+    }
+    if (sit.situacao === 'sem_conta') {
+      // O termo segue a NATUREZA do plano (16/10/2026): colaborador DIMEG e funcionário de
+      // empresa parceira não aceitam o termo de consumidor.
+      const r = await buscarTermoVigente(sit.natureza);
+      setConsultando(false);
       if (r.ok) {
-        setTermo((atual) => {
-          if (atual?.id !== r.id) {
-            setAceite(false);
-            setTermoAberto(false);
-          }
-          return { id: r.id, versao: r.versao, texto: r.texto };
-        });
+        if (termo?.id !== r.id) {
+          setAceite(false);
+          setTermoAberto(false);
+        }
+        setTermo({ id: r.id, versao: r.versao, texto: r.texto });
       }
-    })();
-    return () => {
-      vivo = false;
-    };
-  }, [cpf, naturezaCpf]);
+      setMascaraEmail(sit.mascara);
+      setEtapa('dados');
+      return;
+    }
+    setConsultando(false);
+    if (sit.situacao === 'tem_email' || sit.situacao === 'sem_email') {
+      setBloqueio({
+        motivo: 'ja_tem_conta',
+        texto: 'Esse CPF já tem acesso ao aplicativo. Entre com a sua senha ou recupere-a.',
+      });
+    } else if (sit.situacao === 'bloqueado') {
+      setBloqueio({
+        motivo: 'nao_ativo',
+        texto: 'O seu plano não está ativo no momento. Fale com a gente para regularizar.',
+      });
+    } else if (sit.situacao === 'sem_plano') {
+      setBloqueio({
+        motivo: 'sem_dados_cadastrados',
+        texto: 'Falta completar o seu cadastro com a nossa equipe antes de criar o acesso.',
+      });
+    } else {
+      setBloqueio({
+        motivo: 'nao_cliente',
+        texto: 'Não encontramos um plano DIM+ nesse CPF. Você pode contratar pelo aplicativo.',
+      });
+    }
+  }
+
+  function trocarCpf() {
+    setEtapa('cpf');
+    setMascaraEmail(null);
+    setErro(null);
+    setCamposErro([]);
+  }
 
   // 🔴 TODOS obrigatórios. Diferente da recuperação, aqui não existe canal cadastrado a provar:
   // nascimento e telefone são a única barreira entre um CPF conhecido — e CPF não é segredo no
@@ -130,7 +163,7 @@ export default function PrimeiroAcesso() {
     telefone.replace(/\D/g, '').length >= 10 &&
     aceite &&
     !!termo &&
-    naturezaCpf?.cpf === cpf.replace(/\D/g, '') &&
+    etapa === 'dados' &&
     !enviando;
 
   async function enviar() {
@@ -186,7 +219,12 @@ export default function PrimeiroAcesso() {
                   'Olá! Tentei criar o meu acesso no app do DIM+ e faltam dados no meu cadastro.',
                 ),
             }
-          : null;
+          : bloqueio?.motivo === 'nao_cliente'
+            ? {
+                rotulo: 'Contratar o DIM+',
+                ir: () => router.replace('/cadastro' as never),
+              }
+            : null;
 
   return (
     <KeyboardAvoidingView
@@ -213,23 +251,50 @@ export default function PrimeiroAcesso() {
           <>
             <Text style={s.titulo}>Já sou cliente</Text>
             <Text style={s.sub}>
-              Se você já tem o DIM+ e nunca entrou no aplicativo, confirme os seus dados e
-              enviaremos um link para criar a sua senha.
+              {etapa === 'cpf'
+                ? 'Se você já tem o DIM+ e nunca entrou no aplicativo, comece pelo seu CPF.'
+                : 'Confirme os seus dados e enviaremos um link para criar a sua senha.'}
             </Text>
 
             <View style={s.form}>
-              <Campo
-                rotulo="CPF"
-                valor={cpf}
-                onChange={(v) => {
-                  setCpf(mascaraCPF(v));
-                  setCamposErro((c) => c.filter((x) => x !== 'cpf'));
-                }}
-                invalido={errado('cpf')}
-                placeholder="000.000.000-00"
-                keyboardType="number-pad"
-                maxLength={14}
-              />
+              {etapa === 'cpf' ? (
+                <>
+                  <Campo
+                    rotulo="CPF"
+                    valor={cpf}
+                    onChange={(v) => {
+                      setCpf(mascaraCPF(v));
+                      setErro(null);
+                    }}
+                    placeholder="000.000.000-00"
+                    keyboardType="number-pad"
+                    maxLength={14}
+                  />
+                  {erro ? <Text style={s.erro}>{erro}</Text> : null}
+                  <Pressable
+                    style={({ pressed }) => [
+                      s.botao,
+                      (!cpfValido(cpf) || consultando) && s.botaoOff,
+                      pressed && cpfValido(cpf) && s.botaoPress,
+                    ]}
+                    onPress={continuar}
+                    disabled={!cpfValido(cpf) || consultando}
+                  >
+                    {consultando ? (
+                      <ActivityIndicator color={color.navy} />
+                    ) : (
+                      <Text style={s.botaoTxt}>Continuar</Text>
+                    )}
+                  </Pressable>
+                </>
+              ) : (
+                <>
+              <View style={s.cpfFixo}>
+                <Text style={s.cpfFixoTxt}>CPF {cpf}</Text>
+                <Pressable onPress={trocarCpf} hitSlop={8}>
+                  <Text style={s.linkForte}>Trocar</Text>
+                </Pressable>
+              </View>
               <Campo
                 rotulo="E-mail"
                 valor={email}
@@ -243,9 +308,9 @@ export default function PrimeiroAcesso() {
                 autoCapitalize="none"
                 maxLength={160}
               />
-              {mascaraEmail && mascaraEmail.cpf === cpf.replace(/\D/g, '') ? (
+              {mascaraEmail ? (
                 <Text style={s.dicaEmail}>
-                  Use o e-mail já cadastrado: <Text style={s.dicaEmailForte}>{mascaraEmail.mascara}</Text>
+                  Use o e-mail já cadastrado: <Text style={s.dicaEmailForte}>{mascaraEmail}</Text>
                 </Text>
               ) : null}
               <Campo
@@ -319,6 +384,8 @@ export default function PrimeiroAcesso() {
                   <Text style={s.botaoTxt}>Receber o link de acesso</Text>
                 )}
               </Pressable>
+                </>
+              )}
 
               <Pressable style={s.link} onPress={() => router.back()}>
                 <Text style={s.linkTxt}>
@@ -345,12 +412,14 @@ export default function PrimeiroAcesso() {
             <Text style={s.tituloModal}>
               {bloqueio?.motivo === 'ja_tem_conta'
                 ? 'Você já tem acesso'
-                : bloqueio?.motivo === 'nao_ativo'
-                  ? 'Plano não está ativo'
-                  : 'Falta completar o seu cadastro'}
+                : bloqueio?.motivo === 'nao_cliente'
+                  ? 'CPF sem plano DIM+'
+                  : bloqueio?.motivo === 'nao_ativo'
+                    ? 'Plano não está ativo'
+                    : 'Falta completar o seu cadastro'}
             </Text>
             <Text style={s.textoModal}>{bloqueio?.texto}</Text>
-            {bloqueio && bloqueio.motivo !== 'ja_tem_conta' ? (
+            {bloqueio && bloqueio.motivo !== 'ja_tem_conta' && bloqueio.motivo !== 'nao_cliente' ? (
               <Text style={s.telefoneModal}>{WHATS_LEGIVEL}</Text>
             ) : null}
 
@@ -384,6 +453,13 @@ const s = StyleSheet.create({
   titulo: { fontFamily: font.black, fontSize: size.xxl, color: color.ink },
   sub: { fontFamily: font.regular, fontSize: size.base, color: color.ink2, marginTop: space.xs },
   form: { marginTop: space.xxl },
+  cpfFixo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  cpfFixoTxt: { fontFamily: font.bold, fontSize: size.base, color: color.ink },
   dicaEmail: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: -space.xs, marginBottom: space.md },
   dicaEmailForte: { fontFamily: font.bold, color: color.navy },
   aviso: {
