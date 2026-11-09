@@ -90,6 +90,8 @@ export default function PrimeiroAcesso() {
   // de consumidor; colaborador DIMEG e funcionário de empresa parceira ficavam com o aceite do
   // termo errado. Consulta a triagem uma vez por CPF válido; troca o termo e desmarca o aceite.
   const [naturezaCpf, setNaturezaCpf] = useState<{ cpf: string; natureza: string | null } | null>(null);
+  // 09/11/2026 — dica do e-mail cadastrado, vinda da mesma triagem. Só vale para o CPF atual.
+  const [mascaraEmail, setMascaraEmail] = useState<{ cpf: string; mascara: string } | null>(null);
   useEffect(() => {
     const digitos = cpf.replace(/\D/g, '');
     if (!cpfValido(cpf) || naturezaCpf?.cpf === digitos) return;
@@ -99,6 +101,8 @@ export default function PrimeiroAcesso() {
       if (!vivo) return;
       const natureza = sit.ok && sit.situacao === 'sem_conta' ? sit.natureza : null;
       setNaturezaCpf({ cpf: digitos, natureza });
+      const mascara = sit.ok && sit.situacao === 'sem_conta' ? sit.mascara : null;
+      setMascaraEmail(mascara ? { cpf: digitos, mascara } : null);
       const r = await buscarTermoVigente(natureza);
       if (!vivo) return;
       if (r.ok) {
@@ -239,6 +243,11 @@ export default function PrimeiroAcesso() {
                 autoCapitalize="none"
                 maxLength={160}
               />
+              {mascaraEmail && mascaraEmail.cpf === cpf.replace(/\D/g, '') ? (
+                <Text style={s.dicaEmail}>
+                  Use o e-mail já cadastrado: <Text style={s.dicaEmailForte}>{mascaraEmail.mascara}</Text>
+                </Text>
+              ) : null}
               <Campo
                 rotulo="Data de nascimento"
                 valor={nascimento}
@@ -375,6 +384,8 @@ const s = StyleSheet.create({
   titulo: { fontFamily: font.black, fontSize: size.xxl, color: color.ink },
   sub: { fontFamily: font.regular, fontSize: size.base, color: color.ink2, marginTop: space.xs },
   form: { marginTop: space.xxl },
+  dicaEmail: { fontFamily: font.regular, fontSize: size.sm, color: color.ink2, marginTop: -space.xs, marginBottom: space.md },
+  dicaEmailForte: { fontFamily: font.bold, color: color.navy },
   aviso: {
     backgroundColor: color.offwhite,
     borderWidth: 1,

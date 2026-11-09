@@ -321,7 +321,9 @@ export type SituacaoCpf =
   | { ok: true; situacao: 'sem_email' }
   // 14/09/2026 — cliente que NUNCA criou conta. São 334 ativos. O caminho deles não é
   // recuperar senha (não há o que recuperar), é a tela de primeiro acesso.
-  | { ok: true; situacao: 'sem_conta'; ativo: boolean; natureza: string | null }
+  // 09/11/2026 — `mascara` (ex.: ****ntas@dimeg.com.br) quando há e-mail cadastrado: o primeiro
+  // acesso exige que o digitado bata, e sem a dica a pessoa chutava às cegas.
+  | { ok: true; situacao: 'sem_conta'; ativo: boolean; natureza: string | null; mascara: string | null }
   // 15/09/2026 — plano não ativo. Terminal: a saída é falar com a equipe, não corrigir campo.
   | { ok: true; situacao: 'bloqueado'; status: string; tentativaId: string | null }
   // 15/09/2026 — cliente sem plano. Terminal: sem plano não dá para saber qual termo se
@@ -345,7 +347,7 @@ export async function consultarSituacaoCpf(
     });
     const json = (await resp.json()) as {
       situacao?: 'tem_email' | 'sem_email' | 'sem_conta' | 'nao_cliente' | 'bloqueado' | 'sem_plano';
-      mascara?: string;
+      mascara?: string | null;
       ativo?: boolean;
       status?: string;
       tentativa_id?: string;
@@ -370,7 +372,13 @@ export async function consultarSituacaoCpf(
       };
     }
     if (json.situacao === 'sem_conta') {
-      return { ok: true, situacao: 'sem_conta', ativo: json.ativo === true, natureza: json.natureza ?? null };
+      return {
+        ok: true,
+        situacao: 'sem_conta',
+        ativo: json.ativo === true,
+        natureza: json.natureza ?? null,
+        mascara: json.mascara ?? null,
+      };
     }
     return { ok: true, situacao: json.situacao };
   } catch {
