@@ -17,7 +17,11 @@ const FAQ: { p: string; r: string }[] = [
   },
   {
     p: 'O que significa "em breve"?',
-    r: 'São serviços que ainda estão sendo ativados no app, como os resultados de exames. Você será avisado quando abrirem.',
+    r: 'São serviços que ainda estão sendo ativados no app para o seu plano. Você será avisado quando abrirem.',
+  },
+  {
+    p: 'Onde vejo o resultado dos meus exames?',
+    r: 'Toque em Exames na tela inicial. Lá você acompanha cada exame, vê o laudo quando estiver pronto e pode mandá-lo para o seu e-mail.',
   },
   {
     p: 'Como funciona a telemedicina?',
