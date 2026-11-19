@@ -279,7 +279,15 @@ export default function Cadastro() {
   if (passo === 3 && termo?.termo) {
     const pl = termo.plano;
     return (
-      <View style={[s.tela, { paddingTop: insets.top + space.xl, paddingHorizontal: space.xl }]}>
+      // 19/11/2026: rola e respeita a barra inferior — antes o botão sumia atrás dela no Android.
+      <ScrollView
+        style={s.tela}
+        contentContainerStyle={{
+          paddingTop: insets.top + space.xl,
+          paddingHorizontal: space.xl,
+          paddingBottom: insets.bottom + space.xxl,
+        }}
+      >
         <Pressable onPress={() => setPasso(2)} hitSlop={12} style={s.voltar}>
           <Ionicons name="chevron-back" size={22} color={color.ink2} />
           <Text style={s.voltarTxt}>Voltar</Text>
@@ -295,6 +303,7 @@ export default function Cadastro() {
 
         <ScrollView
           style={s.caixaTermo}
+          nestedScrollEnabled
           onScroll={(e) => {
             const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
             // Margem de 24px: em telas pequenas o offset raramente encosta no valor exato.
@@ -348,7 +357,7 @@ export default function Cadastro() {
             <Text style={s.botaoTxt}>Li e aceito — enviar</Text>
           )}
         </Pressable>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -496,7 +505,7 @@ const s = StyleSheet.create({
   },
   form: { marginTop: space.xl },
   caixaTermo: {
-    flex: 1,
+    height: 320, // dentro de ScrollView, flex:1 colapsa a caixa
     marginTop: space.lg,
     padding: space.md,
     borderRadius: radius.md,

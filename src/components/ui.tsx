@@ -22,7 +22,7 @@ export function Screen({
 }) {
   const insets = useSafeAreaInsets();
   const conteudo = (
-    <View style={{ paddingHorizontal: space.xl, paddingBottom: space.xxl * 2 }}>
+    <View style={{ paddingHorizontal: space.xl, paddingBottom: space.xxl * 2 + insets.bottom }}>
       {titulo ? <Text style={s.tituloTela}>{titulo}</Text> : null}
       {children}
     </View>

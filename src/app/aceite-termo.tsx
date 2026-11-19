@@ -138,7 +138,8 @@ export default function AceiteTermo() {
   const podeAceitar = leuAteOFim && (!exigeConsentimento || consentiu) && !enviando;
 
   return (
-    <Screen titulo="Termo de adesão" scroll={false}>
+    // 19/11/2026: a tela ROLA — com scroll={false} o botão ficava atrás da barra do Android.
+    <Screen titulo="Termo de adesão">
       {plano ? (
         <Card>
           <Text style={s.plano}>{plano.nome}</Text>
@@ -159,6 +160,7 @@ export default function AceiteTermo() {
 
       <ScrollView
         style={s.caixaTexto}
+        nestedScrollEnabled
         onScroll={(e) => {
           const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
           // Margem de 24px: em telas pequenas o offset raramente encosta no valor exato.
